@@ -70,26 +70,25 @@ firewall() {
     ipt6 -t filter -A INPUT -p icmpv6 -m icmp6 --icmpv6-type 134 -j ACCEPT
     ipt6 -t filter -A INPUT -p icmpv6 -m icmp6 --icmpv6-type 135 -j ACCEPT
     ipt6 -t filter -A INPUT -p icmpv6 -m icmp6 --icmpv6-type 136 -j ACCEPT
-    ipt -t filter -A INPUT -m pkttype --pkt-type multicast -j ACCEPT
-    ipt -t filter -A INPUT -m pkttype --pkt-type broadcast -j ACCEPT
+    ipt4 -t filter -A INPUT -p igmp -j ACCEPT
     ipt -t filter -A INPUT -j LOG
     ipt -t filter -A INPUT -j DROP
     
     ipt -t filter -A OUTPUT -o lo -j ACCEPT
     ipt -t filter -A OUTPUT -m conntrack --ctstate INVALID -j REJECT
     ipt -t filter -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+    ipt -t filter -A OUTPUT -o tun+ -j ACCEPT
+    ipt4 -t filter -A OUTPUT -p icmp -j ACCEPT
+    ipt6 -t filter -A OUTPUT -p icmpv6 -j ACCEPT
+    ipt4 -t filter -A OUTPUT -p igmp -j ACCEPT
     ipt -t filter -A OUTPUT -p tcp -m tcp --dport 22 -j ACCEPT
     ipt -t filter -A OUTPUT -p udp -m udp --dport 53 -j ACCEPT
     ipt -t filter -A OUTPUT -p tcp -m tcp --dport 80 -j ACCEPT
+    ipt -t filter -A OUTPUT -p udp -m udp --dport 137 -j ACCEPT
+    ipt -t filter -A OUTPUT -p udp -m udp --dport 138 -j ACCEPT
     ipt -t filter -A OUTPUT -p tcp -m tcp --dport 443 -j ACCEPT
     ipt -t filter -A OUTPUT -p udp -m udp --dport 1194 -j ACCEPT
     ipt -t filter -A OUTPUT -p udp -m udp --dport 5353 -j ACCEPT
-    ipt4 -t filter -A OUTPUT -p icmp -j ACCEPT
-    ipt4 -t filter -A OUTPUT -p igmp -j ACCEPT
-    ipt6 -t filter -A OUTPUT -p icmpv6 -j ACCEPT
-    ipt -t filter -A OUTPUT -m pkttype --pkt-type multicast -j ACCEPT
-    ipt -t filter -A OUTPUT -m pkttype --pkt-type broadcast -j ACCEPT
-    ipt -t filter -A OUTPUT -o tun+ -j ACCEPT
     ipt -t filter -A OUTPUT -j LOG
     ipt -t filter -A OUTPUT -j REJECT
     
@@ -111,25 +110,21 @@ firewall() {
     ipt6 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
     -p icmpv6 -m icmp6 --icmpv6-type 128 -j ACCEPT
     ipt6 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
-    -p icmpv6 -m icmp6 --icmpv6-type 134 -j ACCEPT
-    ipt6 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
-    -p icmpv6 -m icmp6 --icmpv6-type 135 -j ACCEPT
-    ipt6 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
-    -p icmpv6 -m icmp6 --icmpv6-type 136 -j ACCEPT
-    ipt6 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
     -s fe80::/10 -p icmpv6 -m icmp6 --icmpv6-type 130/0 -j ACCEPT
     ipt6 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
     -s fe80::/10 -p icmpv6 -m icmp6 --icmpv6-type 131/0 -j ACCEPT
     ipt6 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
     -s fe80::/10 -p icmpv6 -m icmp6 --icmpv6-type 132/0 -j ACCEPT
     ipt6 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
+    -p icmpv6 -m icmp6 --icmpv6-type 134 -j ACCEPT
+    ipt6 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
+    -p icmpv6 -m icmp6 --icmpv6-type 135 -j ACCEPT
+    ipt6 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
+    -p icmpv6 -m icmp6 --icmpv6-type 136 -j ACCEPT
+    ipt6 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
     -s fe80::/10 -p icmpv6 -m icmp6 --icmpv6-type 143/0 -j ACCEPT
     ipt4 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
     -p igmp -j ACCEPT
-    ipt -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
-    -m pkttype --pkt-type multicast -j ACCEPT
-    ipt -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
-    -m pkttype --pkt-type broadcast -j ACCEPT
     ipt -t filter -A FORWARD -j LOG
     ipt -t filter -A FORWARD -j DROP
 }
@@ -151,7 +146,7 @@ marking() {
 }
 
 get_target() {
-    TARGET=$(( 1514 * 1000 * 1000/ ( ${1} * 1000 / 8 ) ))
+    TARGET=$(( 1514 * 1000 * 1000 / ( ${1} * 1000 / 8 ) ))
     [ ${TARGET} -lt 2500 ] && TARGET=2500
     echo target ${TARGET}us
 }
@@ -163,10 +158,10 @@ egress_qdisc() {
     $TC class add dev ${IFACE} parent 1: classid 1:1 hfsc sc rate ${UPLINK}kbit \
     ul rate ${UPLINK}kbit
 
-    $TC class add dev ${IFACE} parent 1:1 classid 1:11 hfsc ls rate ${PR}kbit
-    $TC class add dev ${IFACE} parent 1:1 classid 1:12 hfsc ls rate ${IN}kbit
-    $TC class add dev ${IFACE} parent 1:1 classid 1:13 hfsc ls rate ${NO}kbit
-    $TC class add dev ${IFACE} parent 1:1 classid 1:14 hfsc ls rate ${BK}kbit
+    $TC class add dev ${IFACE} parent 1:1 classid 1:11 hfsc sc rate ${PR}kbit
+    $TC class add dev ${IFACE} parent 1:1 classid 1:12 hfsc sc rate ${IN}kbit
+    $TC class add dev ${IFACE} parent 1:1 classid 1:13 hfsc sc rate ${NO}kbit
+    $TC class add dev ${IFACE} parent 1:1 classid 1:14 hfsc sc rate ${BK}kbit
 
     $TC qdisc add dev ${IFACE} parent 1:11 handle 110: ${QDISC} `get_target ${PR}` \
     limit ${ELIMIT} ${EECN} flows ${EFLOWS} quantum ${EQUANTUM} interval ${INTERVAL}ms
@@ -178,13 +173,13 @@ egress_qdisc() {
     limit ${ELIMIT} ${EECN} flows ${EFLOWS} quantum ${EQUANTUM} interval ${INTERVAL}ms
 
     $TC filter add dev ${IFACE} parent 1:0 protocol all prio 1 u32 \
-    match mark 0x01 ${IPT_MASK} flowid 1:11
+    match mark 0x01 ${IPT_MASK} classid 1:11
     $TC filter add dev ${IFACE} parent 1:0 protocol all prio 2 u32 \
-    match mark 0x02 ${IPT_MASK} flowid 1:12
+    match mark 0x02 ${IPT_MASK} classid 1:12
     $TC filter add dev ${IFACE} parent 1:0 protocol all prio 3 u32 \
-    match mark 0x03 ${IPT_MASK} flowid 1:13
+    match mark 0x03 ${IPT_MASK} classid 1:13
     $TC filter add dev ${IFACE} parent 1:0 protocol all prio 4 u32 \
-    match mark 0x04 ${IPT_MASK} flowid 1:14
+    match mark 0x04 ${IPT_MASK} classid 1:14
 }
 
 ingress_qdisc() {
@@ -194,12 +189,10 @@ ingress_qdisc() {
     $IP link add name ${DEV} type ifb
 
     $TC qdisc del dev ${DEV} root 2> /dev/null
-    $TC qdisc add dev ${DEV} root handle 1: hfsc default 1
+    $TC qdisc add dev ${DEV} root handle 1: tbf rate ${DOWNLINK}kbit burst 50kB \
+    latency 50ms
 
-    $TC class add dev ${DEV} parent 1: classid 1:1 hfsc sc rate ${DOWNLINK}kbit \
-    ul rate ${DOWNLINK}kbit
-
-    $TC qdisc add dev ${DEV} parent 1:1 handle 11: ${QDISC} `get_target ${DOWNLINK}` \
+    $TC qdisc add dev ${DEV} parent 1: handle 11: ${QDISC} `get_target ${DOWNLINK}` \
     limit ${ILIMIT} ${IECN} flows ${IFLOWS} quantum ${IQUANTUM} interval ${INTERVAL}ms
 
     $IP link set dev ${DEV} up
