@@ -2,20 +2,21 @@
 
 IFACE=eth1
 DEV=ifb0
-DOWNLINK=100000
-UPLINK=6000
+DOWNLINK=$(( 100000 * 95 / 100 ))
+UPLINK=$(( 6000 * 95 / 100 ))
 QDISC=fq_codel
 TC=tc
 IP=ip
 IPT_MASK=0xff
 ELIMIT=500
 ILIMIT=500
-EFLOWS=64
+EFLOWS=256
 IFLOWS=1024
 EECN=noecn
 IECN=ecn
-EQUANTUM=1514
-IQUANTUM=1514
+EQUANTUM=300
+IQUANTUM=300
+INTERVAL=50
 
 PR=$(( ${UPLINK} * 20 / 100 ))
 IN=$(( ${UPLINK} * 20 / 100 ))
@@ -45,8 +46,8 @@ flush() {
     $TC qdisc del dev ${IFACE} root 2> /dev/null
     $TC qdisc del dev ${IFACE} handle ffff: ingress 2> /dev/null
     $TC qdisc del dev ${DEV} root 2> /dev/null
-    $IP link set dev ${DEV} down
-    $IP link delete ${DEV} type ifb
+    $IP link set dev ${DEV} down 2> /dev/null
+    $IP link delete ${DEV} type ifb 2> /dev/null
 }
 
 firewall() {
@@ -134,22 +135,25 @@ firewall() {
 }
 
 marking() {
-    ipt -t mangle -A OUTPUT -j CONNMARK --restore-mark --nfmask 0xff --ctmask 0xff
-    ipt -t mangle -A OUTPUT -m mark ! --mark 0x0/0xff -j ACCEPT
-    ipt -t mangle -A OUTPUT -p udp -m udp --dport 1194 -j MARK --set-xmark 0x4/0xff
-    ipt -t mangle -A OUTPUT -p tcp -m tcp --dport 443  -j MARK --set-xmark 0x4/0xff
-    ipt -t mangle -A OUTPUT -j CONNMARK --save-mark --nfmask 0xff --ctmask 0xff
+    ipt -t mangle -A OUTPUT -j CONNMARK --restore-mark --nfmask ${IPT_MASK} --ctmask ${IPT_MASK}
+    ipt -t mangle -A OUTPUT -m mark ! --mark 0x0/${IPT_MASK} -j ACCEPT
+    ipt -t mangle -A OUTPUT -p udp -m udp --dport 1194 -j MARK --set-xmark 0x4/${IPT_MASK}
+    ipt -t mangle -A OUTPUT -p tcp -m tcp --dport 443  -j MARK --set-xmark 0x4/${IPT_MASK}
+    ipt -t mangle -A OUTPUT -j CONNMARK --save-mark --nfmask ${IPT_MASK} --ctmask ${IPT_MASK}
     
-    ipt -t mangle -A PREROUTING -j CONNMARK --restore-mark --nfmask 0xff --ctmask 0xff
-    ipt -t mangle -A PREROUTING -m mark ! --mark 0x0/0xff -j ACCEPT
-    ipt -t mangle -A PREROUTING -p tcp -m tcp --dport 22 -j MARK --set-xmark 0x1/0xff
-    ipt -t mangle -A PREROUTING -p udp -m udp --dport 53 -j MARK --set-xmark 0x1/0xff
-    ipt -t mangle -A PREROUTING -p udp -m udp --dport 123 -j MARK --set-xmark 0x1/0xff
-    ipt -t mangle -A PREROUTING -p udp -m mark --mark 0x0/0xff \
-    -m connbytes --connbytes 10 --connbytes-mode packets --connbytes-dir both -j MARK --set-xmark 0x1/0xff
-    ipt -t mangle -A PREROUTING -p tcp -m mark --mark 0x0/0xff \
-    -m connbytes --connbytes 250 --connbytes-mode packets --connbytes-dir both -j MARK --set-xmark 0x2/0xff
-    ipt -t mangle -A PREROUTING -j CONNMARK --save-mark --nfmask 0xff --ctmask 0xff
+    ipt -t mangle -A PREROUTING -j CONNMARK --restore-mark --nfmask ${IPT_MASK} --ctmask ${IPT_MASK}
+    ipt -t mangle -A PREROUTING -m mark ! --mark 0x0/${IPT_MASK} -j ACCEPT
+    ipt -t mangle -A PREROUTING -p udp -m mark --mark 0x0/${IPT_MASK} \
+    -m connbytes --connbytes 10 --connbytes-mode packets --connbytes-dir both -j MARK --set-xmark 0x1/${IPT_MASK}
+    ipt -t mangle -A PREROUTING -p tcp -m mark --mark 0x0/${IPT_MASK} \
+    -m connbytes --connbytes 250 --connbytes-mode packets --connbytes-dir both -j MARK --set-xmark 0x2/${IPT_MASK}
+    ipt -t mangle -A PREROUTING -j CONNMARK --save-mark --nfmask ${IPT_MASK} --ctmask ${IPT_MASK}
+}
+
+get_target() {
+    TARGET=$(( 1514 * 1000 * 1000/ ( ${1} * 1000 / 8 ) ))
+    [ ${TARGET} -lt 2500 ] && TARGET=2500
+    echo target ${TARGET}us
 }
 
 egress_qdisc() {
@@ -164,14 +168,14 @@ egress_qdisc() {
     $TC class add dev ${IFACE} parent 1:1 classid 1:13 hfsc ls rate ${NO}kbit
     $TC class add dev ${IFACE} parent 1:1 classid 1:14 hfsc ls rate ${BK}kbit
 
-    $TC qdisc add dev ${IFACE} parent 1:11 handle 110: ${QDISC} \
-    limit ${ELIMIT} ${EECN} flows ${EFLOWS} quantum ${EQUANTUM}
-    $TC qdisc add dev ${IFACE} parent 1:12 handle 120: ${QDISC} \
-    limit ${ELIMIT} ${EECN} flows ${EFLOWS} quantum ${EQUANTUM}
-    $TC qdisc add dev ${IFACE} parent 1:13 handle 130: ${QDISC} \
-    limit ${ELIMIT} ${EECN} flows ${EFLOWS} quantum ${EQUANTUM}
-    $TC qdisc add dev ${IFACE} parent 1:14 handle 140: ${QDISC} \
-    limit ${ELIMIT} ${EECN} flows ${EFLOWS} quantum ${EQUANTUM}
+    $TC qdisc add dev ${IFACE} parent 1:11 handle 110: ${QDISC} `get_target ${PR}` \
+    limit ${ELIMIT} ${EECN} flows ${EFLOWS} quantum ${EQUANTUM} interval ${INTERVAL}ms
+    $TC qdisc add dev ${IFACE} parent 1:12 handle 120: ${QDISC} `get_target ${IN}` \
+    limit ${ELIMIT} ${EECN} flows ${EFLOWS} quantum ${EQUANTUM} interval ${INTERVAL}ms
+    $TC qdisc add dev ${IFACE} parent 1:13 handle 130: ${QDISC} `get_target ${NO}` \
+    limit ${ELIMIT} ${EECN} flows ${EFLOWS} quantum ${EQUANTUM} interval ${INTERVAL}ms
+    $TC qdisc add dev ${IFACE} parent 1:14 handle 140: ${QDISC} `get_target ${BK}` \
+    limit ${ELIMIT} ${EECN} flows ${EFLOWS} quantum ${EQUANTUM} interval ${INTERVAL}ms
 
     $TC filter add dev ${IFACE} parent 1:0 protocol all prio 1 u32 \
     match mark 0x01 ${IPT_MASK} flowid 1:11
@@ -195,8 +199,8 @@ ingress_qdisc() {
     $TC class add dev ${DEV} parent 1: classid 1:1 hfsc sc rate ${DOWNLINK}kbit \
     ul rate ${DOWNLINK}kbit
 
-    $TC qdisc add dev ${DEV} parent 1:1 handle 11: ${QDISC} \
-    limit ${ILIMIT} ${IECN} flows ${IFLOWS} quantum ${IQUANTUM}
+    $TC qdisc add dev ${DEV} parent 1:1 handle 11: ${QDISC} `get_target ${DOWNLINK}` \
+    limit ${ILIMIT} ${IECN} flows ${IFLOWS} quantum ${IQUANTUM} interval ${INTERVAL}ms
 
     $IP link set dev ${DEV} up
 
