@@ -1,52 +1,140 @@
 #!/bin/sh
 
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation, either version 3
-# of the License, or (at your option) any later version.
+IFACE=eth1
+DEV=ifb0
+DOWNLINK=$(( 100000 * 95 / 100 ))
+UPLINK=$(( 6000 * 95 / 100 ))
+QDISC=fq_codel
+TC=tc
+IP=ip
+IPT_MASK=0xff
+ELIMIT=500
+ILIMIT=500
+EFLOWS=256
+IFLOWS=1024
+EECN=noecn
+IECN=ecn
+EQUANTUM=300
+IQUANTUM=300
+INTERVAL=50
 
-set -e
+PR=$(( ${UPLINK} * 20 / 100 ))
+IN=$(( ${UPLINK} * 20 / 100 ))
+NO=$(( ${UPLINK} * 50 / 100 ))
+BK=$(( ${UPLINK} * 10 / 100 ))
 
-load_rules()
-{
-        #load tc rules
-        if [ ! -f /etc/iptables/rules.tc ]; then
-                echo "Warning: skipping tc (no rules to load)"
-        else
-                . /etc/iptables/rules.tc
-                tc_start
-        fi
+flush_qdisc() {
+    $TC qdisc del dev ${IFACE} root 2> /dev/null
+    $TC qdisc del dev ${IFACE} handle ffff: ingress 2> /dev/null
+    $TC qdisc del dev ${DEV} root 2> /dev/null
+    $IP link set dev ${DEV} down 2> /dev/null
+    $IP link delete ${DEV} type ifb 2> /dev/null
 }
 
-save_rules()
-{
-        echo "Warning: tc save not implemented."
+get_mtu() {
+    echo $(cat /sys/class/net/${1}/mtu)
 }
 
-flush_rules()
-{
-        #flush tc rules
-        if [ ! -f /etc/iptables/rules.tc ]; then
-                echo "Warning: skipping tc (no rules to flush)"
-        else
-                . /etc/iptables/rules.tc
-                tc_stop
-        fi
+get_target() {
+    TARGET=$(( `get_mtu ${IFACE}` * 1000 * 1000 / ( ${1} * 1000 / 8 ) ))
+    [ ${TARGET} -lt 2500 ] && TARGET=2500
+    echo target ${TARGET}us
+}
+
+eth_setup() {
+    ethtool -K ${IFACE} gso off 2> /dev/null
+    ethtool -K ${IFACE} tso off 2> /dev/null
+    ethtool -K ${IFACE} ufo off 2> /dev/null
+    ethtool -K ${IFACE} gro off 2> /dev/null
+
+    if [ -e /sys/class/net/${IFACE}/queues/tx-0/byte_queue_limits ]
+    then
+       for i in /sys/class/net/${IFACE}/queues/tx-*/byte_queue_limits
+       do
+          echo $(( 4 * $( get_mtu ${IFACE} ) )) > $i/limit_max
+       done
+    fi
+}
+
+egress_qdisc() {
+    $TC qdisc del dev ${IFACE} root 2> /dev/null
+    $TC qdisc add dev ${IFACE} root handle 1: hfsc default 13
+
+    $TC class add dev ${IFACE} parent 1: classid 1:1 hfsc \
+        sc rate ${UPLINK}kbit ul rate ${UPLINK}kbit
+
+    $TC class add dev ${IFACE} parent 1:1 classid 1:11 hfsc sc rate ${PR}kbit
+    $TC class add dev ${IFACE} parent 1:1 classid 1:12 hfsc sc rate ${IN}kbit
+    $TC class add dev ${IFACE} parent 1:1 classid 1:13 hfsc sc rate ${NO}kbit
+    $TC class add dev ${IFACE} parent 1:1 classid 1:14 hfsc sc rate ${BK}kbit
+
+    $TC qdisc add dev ${IFACE} parent 1:11 handle 110: ${QDISC} \
+        `get_target ${PR}` limit ${ELIMIT} ${EECN} flows ${EFLOWS} \
+        quantum ${EQUANTUM} interval ${INTERVAL}ms
+    $TC qdisc add dev ${IFACE} parent 1:12 handle 120: ${QDISC} \
+        `get_target ${IN}` limit ${ELIMIT} ${EECN} flows ${EFLOWS} \
+        quantum ${EQUANTUM} interval ${INTERVAL}ms
+    $TC qdisc add dev ${IFACE} parent 1:13 handle 130: ${QDISC} \
+        `get_target ${NO}` limit ${ELIMIT} ${EECN} flows ${EFLOWS} \
+        quantum ${EQUANTUM} interval ${INTERVAL}ms
+    $TC qdisc add dev ${IFACE} parent 1:14 handle 140: ${QDISC} \
+        `get_target ${BK}` limit ${ELIMIT} ${EECN} flows ${EFLOWS} \
+        quantum ${EQUANTUM} interval ${INTERVAL}ms
+
+    $TC filter add dev ${IFACE} parent 1:0 protocol all prio 1 u32 \
+    match mark 0x01 ${IPT_MASK} classid 1:11
+    $TC filter add dev ${IFACE} parent 1:0 protocol all prio 2 u32 \
+    match mark 0x02 ${IPT_MASK} classid 1:12
+    $TC filter add dev ${IFACE} parent 1:0 protocol all prio 3 u32 \
+    match mark 0x03 ${IPT_MASK} classid 1:13
+    $TC filter add dev ${IFACE} parent 1:0 protocol all prio 4 u32 \
+    match mark 0x04 ${IPT_MASK} classid 1:14
+}
+
+ingress_qdisc() {
+    $TC qdisc del dev ${IFACE} handle ffff: ingress 2> /dev/null
+    $TC qdisc add dev ${IFACE} handle ffff: ingress
+
+    $IP link add name ${DEV} type ifb
+
+    $TC qdisc del dev ${DEV} root 2> /dev/null
+    $TC qdisc add dev ${DEV} root handle 1: tbf rate ${DOWNLINK}kbit \
+        burst 100kb latency 1s
+
+    $TC qdisc add dev ${DEV} parent 1: handle 11: ${QDISC} \
+        `get_target ${DOWNLINK}` limit ${ILIMIT} ${IECN} flows ${IFLOWS} \
+        quantum ${IQUANTUM} interval ${INTERVAL}ms
+
+    $IP link set dev ${DEV} up
+
+    $TC filter add dev ${IFACE} parent ffff: protocol all prio 1 u32 \
+    match u32 0 0 action mirred egress redirect dev ${DEV}
+}
+
+tc_start() {
+    flush_qdisc
+    eth_setup
+    egress_qdisc
+    ingress_qdisc
+}
+
+tc_stop() {
+    flush_qdisc
 }
 
 case "$1" in
 start|restart|reload|force-reload)
-        load_rules
-        ;;
-save)
-        save_rules
-        ;;
+    tc_start
+    ;;                                                                                                   
+save)                                                                                                        
+    echo "tc save not applicable."
+    ;;
 stop)
-        echo "Automatic flushing disabled, use \"flush\" instead of \"stop\""
-        ;;
+    echo "Automatic flushing disabled, use \"flush\" instead of \"stop\""
+    ;;
 flush)
-        flush_rules
-        ;;
+    tc_stop
+    ;;
 *)
     echo "Usage: $0 {start|restart|reload|force-reload|save|flush}" >&2
     exit 1
