@@ -1,4 +1,4 @@
-#! /bin/bash
+#! /bin/sh
 
 IPT_MASK=0xff
 
@@ -42,15 +42,19 @@ firewall() {
          -p udp -m udp --dport 546 -j ACCEPT
     ipt4 -t filter -A INPUT -p icmp -m icmp --icmp-type 8 -j ACCEPT
     ipt6 -t filter -A INPUT -p icmpv6 -m icmp6 --icmpv6-type 128 -j ACCEPT
+    ipt6 -t filter -A INPUT -p icmpv6 -m icmp6 --icmpv6-type 130/0 -j ACCEPT
+    ipt6 -t filter -A INPUT -p icmpv6 -m icmp6 --icmpv6-type 131/0 -j ACCEPT
+    ipt6 -t filter -A INPUT -p icmpv6 -m icmp6 --icmpv6-type 132/0 -j ACCEPT
     ipt6 -t filter -A INPUT -p icmpv6 -m icmp6 --icmpv6-type 134 -j ACCEPT
     ipt6 -t filter -A INPUT -p icmpv6 -m icmp6 --icmpv6-type 135 -j ACCEPT
     ipt6 -t filter -A INPUT -p icmpv6 -m icmp6 --icmpv6-type 136 -j ACCEPT
+    ipt6 -t filter -A INPUT -p icmpv6 -m icmp6 --icmpv6-type 143/0 -j ACCEPT
     ipt4 -t filter -A INPUT -p igmp -j ACCEPT
-    ipt -t filter -A INPUT -j LOG
+    ipt -t filter -A INPUT -j LOG --log-prefix "INPUT:"
     ipt -t filter -A INPUT -j DROP
     
     ipt -t filter -A OUTPUT -o lo -j ACCEPT
-    ipt -t filter -A OUTPUT -m conntrack --ctstate INVALID -j REJECT
+    ipt -t filter -A OUTPUT -m conntrack --ctstate INVALID -j DROP
     ipt -t filter -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED \
         -j ACCEPT
     ipt -t filter -A OUTPUT -o tun+ -j ACCEPT
@@ -65,8 +69,8 @@ firewall() {
     ipt -t filter -A OUTPUT -p tcp -m tcp --dport 443 -j ACCEPT
     ipt -t filter -A OUTPUT -p udp -m udp --dport 1194 -j ACCEPT
     ipt -t filter -A OUTPUT -p udp -m udp --dport 5353 -j ACCEPT
-    ipt -t filter -A OUTPUT -j LOG
-    ipt -t filter -A OUTPUT -j REJECT
+    ipt -t filter -A OUTPUT -j LOG --log-prefix "OUTPUT:"
+    ipt -t filter -A OUTPUT -j DROP
     
     ipt -t filter -A FORWARD -p tcp -m tcp --tcp-flags ALL ALL -j DROP
     ipt -t filter -A FORWARD -p tcp -m tcp --tcp-flags SYN,FIN SYN,FIN -j DROP
@@ -103,7 +107,7 @@ firewall() {
          -s fe80::/10 -p icmpv6 -m icmp6 --icmpv6-type 143/0 -j ACCEPT
     ipt4 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
          -p igmp -j ACCEPT
-    ipt -t filter -A FORWARD -j LOG
+    ipt -t filter -A FORWARD -j LOG --log-prefix "FORWARD:"
     ipt -t filter -A FORWARD -j DROP
 }
 
