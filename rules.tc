@@ -99,7 +99,7 @@ ingress_qdisc() {
 
     $TC qdisc del dev ${DEV} root 2> /dev/null
     $TC qdisc add dev ${DEV} root handle 1: tbf rate ${DOWNLINK}kbit \
-        burst 50kB latency 50ms
+        burst 100kb latency 1s
 
     $TC qdisc add dev ${DEV} parent 1: handle 11: ${QDISC} \
         `get_target ${DOWNLINK}` limit ${ILIMIT} ${IECN} flows ${IFLOWS} \
