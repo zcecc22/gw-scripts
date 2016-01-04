@@ -1,6 +1,7 @@
 #!/bin/sh
 
-IFACE=eth1
+WAN=eth1
+LAN=eth0
 DEV=ifb0
 DOWNLINK=$(( 100000 * 95 / 100 ))
 UPLINK=$(( 6000 * 95 / 100 ))
@@ -24,8 +25,8 @@ NO=$(( ${UPLINK} * 50 / 100 ))
 BK=$(( ${UPLINK} * 10 / 100 ))
 
 flush_qdisc() {
-    $TC qdisc del dev ${IFACE} root 2> /dev/null
-    $TC qdisc del dev ${IFACE} handle ffff: ingress 2> /dev/null
+    $TC qdisc del dev ${WAN} root 2> /dev/null
+    $TC qdisc del dev ${WAN} handle ffff: ingress 2> /dev/null
     $TC qdisc del dev ${DEV} root 2> /dev/null
     $IP link set dev ${DEV} down 2> /dev/null
     $IP link delete ${DEV} type ifb 2> /dev/null
@@ -36,64 +37,64 @@ get_mtu() {
 }
 
 get_target() {
-    TARGET=$(( `get_mtu ${IFACE}` * 1000 * 1000 / ( ${1} * 1000 / 8 ) ))
+    TARGET=$(( `get_mtu ${WAN}` * 1000 * 1000 / ( ${1} * 1000 / 8 ) ))
     [ ${TARGET} -lt 2500 ] && TARGET=2500
     echo target ${TARGET}us
 }
 
 eth_setup() {
-    ethtool -K ${IFACE} gso off 2> /dev/null
-    ethtool -K ${IFACE} tso off 2> /dev/null
-    ethtool -K ${IFACE} ufo off 2> /dev/null
-    ethtool -K ${IFACE} gro off 2> /dev/null
+    ethtool -K ${1} gso off 2> /dev/null
+    ethtool -K ${1} tso off 2> /dev/null
+    ethtool -K ${1} ufo off 2> /dev/null
+    ethtool -K ${1} gro off 2> /dev/null
 
-    if [ -e /sys/class/net/${IFACE}/queues/tx-0/byte_queue_limits ]
+    if [ -e /sys/class/net/${1}/queues/tx-0/byte_queue_limits ]
     then
-       for i in /sys/class/net/${IFACE}/queues/tx-*/byte_queue_limits
+       for i in /sys/class/net/${1}/queues/tx-*/byte_queue_limits
        do
-          echo $(( 4 * $( get_mtu ${IFACE} ) )) > $i/limit_max
+          echo $(( 4 * $( get_mtu ${1} ) )) > $i/limit_max
        done
     fi
 }
 
 egress_qdisc() {
-    $TC qdisc del dev ${IFACE} root 2> /dev/null
-    $TC qdisc add dev ${IFACE} root handle 1: hfsc default 13
+    $TC qdisc del dev ${WAN} root 2> /dev/null
+    $TC qdisc add dev ${WAN} root handle 1: hfsc default 13
 
-    $TC class add dev ${IFACE} parent 1: classid 1:1 hfsc \
+    $TC class add dev ${WAN} parent 1: classid 1:1 hfsc \
         sc rate ${UPLINK}kbit ul rate ${UPLINK}kbit
 
-    $TC class add dev ${IFACE} parent 1:1 classid 1:11 hfsc sc rate ${PR}kbit
-    $TC class add dev ${IFACE} parent 1:1 classid 1:12 hfsc sc rate ${IN}kbit
-    $TC class add dev ${IFACE} parent 1:1 classid 1:13 hfsc sc rate ${NO}kbit
-    $TC class add dev ${IFACE} parent 1:1 classid 1:14 hfsc sc rate ${BK}kbit
+    $TC class add dev ${WAN} parent 1:1 classid 1:11 hfsc sc rate ${PR}kbit
+    $TC class add dev ${WAN} parent 1:1 classid 1:12 hfsc sc rate ${IN}kbit
+    $TC class add dev ${WAN} parent 1:1 classid 1:13 hfsc sc rate ${NO}kbit
+    $TC class add dev ${WAN} parent 1:1 classid 1:14 hfsc sc rate ${BK}kbit
 
-    $TC qdisc add dev ${IFACE} parent 1:11 handle 110: ${QDISC} \
+    $TC qdisc add dev ${WAN} parent 1:11 handle 110: ${QDISC} \
         `get_target ${PR}` limit ${ELIMIT} ${EECN} flows ${EFLOWS} \
         quantum ${EQUANTUM} interval ${INTERVAL}ms
-    $TC qdisc add dev ${IFACE} parent 1:12 handle 120: ${QDISC} \
+    $TC qdisc add dev ${WAN} parent 1:12 handle 120: ${QDISC} \
         `get_target ${IN}` limit ${ELIMIT} ${EECN} flows ${EFLOWS} \
         quantum ${EQUANTUM} interval ${INTERVAL}ms
-    $TC qdisc add dev ${IFACE} parent 1:13 handle 130: ${QDISC} \
+    $TC qdisc add dev ${WAN} parent 1:13 handle 130: ${QDISC} \
         `get_target ${NO}` limit ${ELIMIT} ${EECN} flows ${EFLOWS} \
         quantum ${EQUANTUM} interval ${INTERVAL}ms
-    $TC qdisc add dev ${IFACE} parent 1:14 handle 140: ${QDISC} \
+    $TC qdisc add dev ${WAN} parent 1:14 handle 140: ${QDISC} \
         `get_target ${BK}` limit ${ELIMIT} ${EECN} flows ${EFLOWS} \
         quantum ${EQUANTUM} interval ${INTERVAL}ms
 
-    $TC filter add dev ${IFACE} parent 1:0 protocol all prio 1 u32 \
+    $TC filter add dev ${WAN} parent 1:0 protocol all prio 1 u32 \
     match mark 0x01 ${IPT_MASK} classid 1:11
-    $TC filter add dev ${IFACE} parent 1:0 protocol all prio 2 u32 \
+    $TC filter add dev ${WAN} parent 1:0 protocol all prio 2 u32 \
     match mark 0x02 ${IPT_MASK} classid 1:12
-    $TC filter add dev ${IFACE} parent 1:0 protocol all prio 3 u32 \
+    $TC filter add dev ${WAN} parent 1:0 protocol all prio 3 u32 \
     match mark 0x03 ${IPT_MASK} classid 1:13
-    $TC filter add dev ${IFACE} parent 1:0 protocol all prio 4 u32 \
+    $TC filter add dev ${WAN} parent 1:0 protocol all prio 4 u32 \
     match mark 0x04 ${IPT_MASK} classid 1:14
 }
 
 ingress_qdisc() {
-    $TC qdisc del dev ${IFACE} handle ffff: ingress 2> /dev/null
-    $TC qdisc add dev ${IFACE} handle ffff: ingress
+    $TC qdisc del dev ${WAN} handle ffff: ingress 2> /dev/null
+    $TC qdisc add dev ${WAN} handle ffff: ingress
 
     $IP link add name ${DEV} type ifb
 
@@ -107,13 +108,14 @@ ingress_qdisc() {
 
     $IP link set dev ${DEV} up
 
-    $TC filter add dev ${IFACE} parent ffff: protocol all prio 1 u32 \
+    $TC filter add dev ${WAN} parent ffff: protocol all prio 1 u32 \
     match u32 0 0 action mirred egress redirect dev ${DEV}
 }
 
 tc_start() {
     flush_qdisc
-    eth_setup
+    eth_setup ${WAN}
+    eth_setup ${LAN}
     egress_qdisc
     ingress_qdisc
 }
@@ -125,8 +127,8 @@ tc_stop() {
 case "$1" in
 start|restart|reload|force-reload)
     tc_start
-    ;;                                                                                                   
-save)                                                                                                        
+    ;;
+save)
     echo "tc save not applicable."
     ;;
 stop)
