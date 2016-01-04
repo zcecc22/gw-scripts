@@ -1,7 +1,5 @@
 #!/bin/sh
 
-IPT_MASK=0xff
-
 ipt() {
     iptables $* 2>&1
     ip6tables $* 2>&1
@@ -52,7 +50,7 @@ firewall() {
     ipt4 -t filter -A INPUT -p igmp -j ACCEPT
     ipt -t filter -A INPUT -j LOG --log-prefix "INPUT:"
     ipt -t filter -A INPUT -j DROP
-    
+
     ipt -t filter -A OUTPUT -o lo -j ACCEPT
     ipt -t filter -A OUTPUT -m conntrack --ctstate INVALID -j DROP
     ipt -t filter -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED \
@@ -71,7 +69,7 @@ firewall() {
     ipt -t filter -A OUTPUT -p udp -m udp --dport 5353 -j ACCEPT
     ipt -t filter -A OUTPUT -j LOG --log-prefix "OUTPUT:"
     ipt -t filter -A OUTPUT -j DROP
-    
+
     ipt -t filter -A FORWARD -p tcp -m tcp --tcp-flags ALL ALL -j DROP
     ipt -t filter -A FORWARD -p tcp -m tcp --tcp-flags SYN,FIN SYN,FIN -j DROP
     ipt -t filter -A FORWARD -p tcp -m tcp --tcp-flags SYN,RST SYN,RST -j DROP
@@ -111,30 +109,5 @@ firewall() {
     ipt -t filter -A FORWARD -j DROP
 }
 
-marking() {
-    ipt -t mangle -A OUTPUT -j CONNMARK --restore-mark --nfmask ${IPT_MASK} \
-        --ctmask ${IPT_MASK}
-    ipt -t mangle -A OUTPUT -m mark ! --mark 0x0/${IPT_MASK} -j ACCEPT
-    ipt -t mangle -A OUTPUT -p udp -m udp --dport 1194 \
-        -j MARK --set-xmark 0x4/${IPT_MASK}
-    ipt -t mangle -A OUTPUT -p tcp -m tcp --dport 443  \
-        -j MARK --set-xmark 0x4/${IPT_MASK}
-    ipt -t mangle -A OUTPUT -j CONNMARK --save-mark --nfmask ${IPT_MASK} \
-        --ctmask ${IPT_MASK}
-    
-    ipt -t mangle -A PREROUTING -j CONNMARK --restore-mark \
-        --nfmask ${IPT_MASK} --ctmask ${IPT_MASK}
-    ipt -t mangle -A PREROUTING -m mark ! --mark 0x0/${IPT_MASK} -j ACCEPT
-    ipt -t mangle -A PREROUTING -p udp -m mark --mark 0x0/${IPT_MASK} \
-        -m connbytes --connbytes 10 --connbytes-mode packets \
-        --connbytes-dir both -j MARK --set-xmark 0x1/${IPT_MASK}
-    ipt -t mangle -A PREROUTING -p tcp -m mark --mark 0x0/${IPT_MASK} \
-        -m connbytes --connbytes 250 --connbytes-mode packets \
-        --connbytes-dir both -j MARK --set-xmark 0x2/${IPT_MASK}
-    ipt -t mangle -A PREROUTING -j CONNMARK --save-mark --nfmask ${IPT_MASK} \
-        --ctmask ${IPT_MASK}
-}
-
 flush_firewall
 firewall
-marking

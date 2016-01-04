@@ -8,21 +8,23 @@ UPLINK=$(( 6000 * 95 / 100 ))
 QDISC=fq_codel
 TC=tc
 IP=ip
-IPT_MASK=0xff
-ELIMIT=500
-ILIMIT=500
-EFLOWS=256
+ELIMIT=250
+ILIMIT=4200
+EFLOWS=512
 IFLOWS=1024
 EECN=noecn
 IECN=ecn
 EQUANTUM=300
-IQUANTUM=300
-INTERVAL=50
-
-PR=$(( ${UPLINK} * 20 / 100 ))
-IN=$(( ${UPLINK} * 20 / 100 ))
-NO=$(( ${UPLINK} * 50 / 100 ))
-BK=$(( ${UPLINK} * 10 / 100 ))
+IQUANTUM=600
+INTERVAL=60
+HZ=1000
+PACKETSIZE=1540
+BQL=$(( 2 * ${PACKETSIZE} ))
+MINTARGET=1500
+EBURST=$(( ${UPLINK} * 1000 / ( ${HZ} * 8 ) ))
+[ ${EBURST} -lt ${PACKETSIZE} ] && EBURST=${PACKETSIZE}
+IBURST=$(( ${DOWNLINK} * 1000 / ( ${HZ} * 8 ) ))
+[ ${IBURST} -lt ${PACKETSIZE} ] && IBURST=${PACKETSIZE}
 
 flush_qdisc() {
     $TC qdisc del dev ${WAN} root 2> /dev/null
@@ -32,13 +34,9 @@ flush_qdisc() {
     $IP link delete ${DEV} type ifb 2> /dev/null
 }
 
-get_mtu() {
-    echo $(cat /sys/class/net/${1}/mtu)
-}
-
 get_target() {
-    TARGET=$(( `get_mtu ${WAN}` * 1000 * 1000 / ( ${1} * 1000 / 8 ) ))
-    [ ${TARGET} -lt 2500 ] && TARGET=2500
+    TARGET=$(( ${PACKETSIZE} * 1000 * 1000 / ( ${1} * 1000 / 8 ) ))
+    [ ${TARGET} -lt ${MINTARGET} ] && TARGET=${MINTARGET}
     echo target ${TARGET}us
 }
 
@@ -52,44 +50,19 @@ eth_setup() {
     then
        for i in /sys/class/net/${1}/queues/tx-*/byte_queue_limits
        do
-          echo $(( 4 * $( get_mtu ${1} ) )) > $i/limit_max
+          echo ${BQL} > $i/limit_max
        done
     fi
 }
 
 egress_qdisc() {
     $TC qdisc del dev ${WAN} root 2> /dev/null
-    $TC qdisc add dev ${WAN} root handle 1: hfsc default 13
+    $TC qdisc add dev ${WAN} root handle 1: tbf rate ${UPLINK}kbit \
+        burst ${EBURST}B limit $(( ${ELIMIT} * ${PACKETSIZE} ))B
 
-    $TC class add dev ${WAN} parent 1: classid 1:1 hfsc \
-        sc rate ${UPLINK}kbit ul rate ${UPLINK}kbit
-
-    $TC class add dev ${WAN} parent 1:1 classid 1:11 hfsc sc rate ${PR}kbit
-    $TC class add dev ${WAN} parent 1:1 classid 1:12 hfsc sc rate ${IN}kbit
-    $TC class add dev ${WAN} parent 1:1 classid 1:13 hfsc sc rate ${NO}kbit
-    $TC class add dev ${WAN} parent 1:1 classid 1:14 hfsc sc rate ${BK}kbit
-
-    $TC qdisc add dev ${WAN} parent 1:11 handle 110: ${QDISC} \
-        `get_target ${PR}` limit ${ELIMIT} ${EECN} flows ${EFLOWS} \
+    $TC qdisc add dev ${WAN} parent 1: handle 11: ${QDISC} \
+        `get_target ${UPLINK}` limit ${ELIMIT} ${EECN} flows ${EFLOWS} \
         quantum ${EQUANTUM} interval ${INTERVAL}ms
-    $TC qdisc add dev ${WAN} parent 1:12 handle 120: ${QDISC} \
-        `get_target ${IN}` limit ${ELIMIT} ${EECN} flows ${EFLOWS} \
-        quantum ${EQUANTUM} interval ${INTERVAL}ms
-    $TC qdisc add dev ${WAN} parent 1:13 handle 130: ${QDISC} \
-        `get_target ${NO}` limit ${ELIMIT} ${EECN} flows ${EFLOWS} \
-        quantum ${EQUANTUM} interval ${INTERVAL}ms
-    $TC qdisc add dev ${WAN} parent 1:14 handle 140: ${QDISC} \
-        `get_target ${BK}` limit ${ELIMIT} ${EECN} flows ${EFLOWS} \
-        quantum ${EQUANTUM} interval ${INTERVAL}ms
-
-    $TC filter add dev ${WAN} parent 1:0 protocol all prio 1 u32 \
-    match mark 0x01 ${IPT_MASK} classid 1:11
-    $TC filter add dev ${WAN} parent 1:0 protocol all prio 2 u32 \
-    match mark 0x02 ${IPT_MASK} classid 1:12
-    $TC filter add dev ${WAN} parent 1:0 protocol all prio 3 u32 \
-    match mark 0x03 ${IPT_MASK} classid 1:13
-    $TC filter add dev ${WAN} parent 1:0 protocol all prio 4 u32 \
-    match mark 0x04 ${IPT_MASK} classid 1:14
 }
 
 ingress_qdisc() {
@@ -100,7 +73,7 @@ ingress_qdisc() {
 
     $TC qdisc del dev ${DEV} root 2> /dev/null
     $TC qdisc add dev ${DEV} root handle 1: tbf rate ${DOWNLINK}kbit \
-        burst 100kb latency 1s
+        burst ${IBURST}B limit $(( ${ILIMIT} * ${PACKETSIZE} ))B
 
     $TC qdisc add dev ${DEV} parent 1: handle 11: ${QDISC} \
         `get_target ${DOWNLINK}` limit ${ILIMIT} ${IECN} flows ${IFLOWS} \
