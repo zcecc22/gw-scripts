@@ -21,9 +21,9 @@ HZ=1000
 PACKETSIZE=1515
 BQL=$(( 2 * ${PACKETSIZE} ))
 MINTARGET=1500
-EBURST=$(( ${UPLINK} * 1000 / ( ${HZ} * 8 ) ))
+EBURST=$(( ( ${UPLINK} * 1000 / ( ${HZ} * 8 ) ) + 1 ))
 [ ${EBURST} -lt ${PACKETSIZE} ] && EBURST=${PACKETSIZE}
-IBURST=$(( ${DOWNLINK} * 1000 / ( ${HZ} * 8 ) ))
+IBURST=$(( ( ${DOWNLINK} * 1000 / ( ${HZ} * 8 ) ) + 1 ))
 [ ${IBURST} -lt ${PACKETSIZE} ] && IBURST=${PACKETSIZE}
 
 flush_qdisc() {
