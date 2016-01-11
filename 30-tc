@@ -3,8 +3,8 @@
 WAN=eth1
 LAN=eth0
 DEV=ifb0
-DOWNLINK=$(( 100000 * 99 / 100 ))
-UPLINK=$(( 6000 * 95 / 100 ))
+DOWNLINK=$(( 100000 * 98 / 100 ))
+UPLINK=$(( 6000 * 98 / 100 ))
 QDISC=fq_codel
 TC=tc
 IP=ip
@@ -16,15 +16,15 @@ EECN=noecn
 IECN=ecn
 EQUANTUM=300
 IQUANTUM=600
-INTERVAL=50
+INTERVAL=35
 HZ=1000
-PACKETSIZE=1515
+PACKETSIZE=1514
 BQL=${PACKETSIZE}
-MINTARGET=1500
+MINTARGET=2000
 EBURST=$(( ( ${UPLINK} * 1000 / ( ${HZ} * 8 ) ) + 1 ))
-[ ${EBURST} -lt ${PACKETSIZE} ] && EBURST=${PACKETSIZE}
+[ ${EBURST} -lt $(( ${PACKETSIZE} + 1 )) ] && EBURST=$(( ${PACKETSIZE} + 1 ))
 IBURST=$(( ( ${DOWNLINK} * 1000 / ( ${HZ} * 8 ) ) + 1 ))
-[ ${IBURST} -lt ${PACKETSIZE} ] && IBURST=${PACKETSIZE}
+[ ${IBURST} -lt $(( ${PACKETSIZE} + 1 )) ] && IBURST=$(( ${PACKETSIZE} + 1 ))
 
 flush_qdisc() {
     $TC qdisc del dev ${WAN} root 2> /dev/null
