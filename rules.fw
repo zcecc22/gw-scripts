@@ -35,6 +35,7 @@ firewall() {
     ipt -t filter -A INPUT -m conntrack --ctstate INVALID -j DROP
     ipt -t filter -A INPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
     ipt -t filter -A INPUT -m physdev --physdev-in eth0 -j ACCEPT
+    ipt -t filter -A INPUT -i br0 -m addrtype --dst-type MULTICAST -j ACCEPT
     ipt4 -t filter -A INPUT -p udp -m udp --dport 68 -j ACCEPT
     ipt6 -t filter -A INPUT -s fc00::/6 -d fc00::/6 \
          -p udp -m udp --dport 546 -j ACCEPT
