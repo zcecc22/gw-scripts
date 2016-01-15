@@ -35,8 +35,8 @@ firewall() {
     ipt -t filter -A INPUT -m conntrack --ctstate INVALID -j DROP
     ipt -t filter -A INPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
     ipt -t filter -A INPUT -m physdev --physdev-in eth0 -j ACCEPT
-    ipt -t filter -A INPUT -i br0 -m addrtype --dst-type MULTICAST -j ACCEPT
-    ipt4 -t filter -A INPUT -i br0 -m addrtype --dst-type BROADCAST -j ACCEPT
+    ipt -t filter -A INPUT -m addrtype --dst-type MULTICAST -j ACCEPT
+    ipt4 -t filter -A INPUT -m addrtype --dst-type BROADCAST -j ACCEPT
     ipt4 -t filter -A INPUT -p udp -m udp --dport 68 -j ACCEPT
     ipt6 -t filter -A INPUT -s fc00::/6 -d fc00::/6 \
          -p udp -m udp --dport 546 -j ACCEPT
@@ -58,17 +58,15 @@ firewall() {
     ipt -t filter -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED \
         -j ACCEPT
     ipt -t filter -A OUTPUT -o tun+ -j ACCEPT
+    ipt -t filter -A OUTPUT -m addrtype --dst-type MULTICAST -j ACCEPT
+    ipt4 -t filter -A OUTPUT -m addrtype --dst-type BROADCAST -j ACCEPT
     ipt4 -t filter -A OUTPUT -p icmp -j ACCEPT
     ipt6 -t filter -A OUTPUT -p icmpv6 -j ACCEPT
     ipt4 -t filter -A OUTPUT -p igmp -j ACCEPT
-    ipt -t filter -A OUTPUT -p tcp -m tcp --dport 22 -j ACCEPT
     ipt -t filter -A OUTPUT -p udp -m udp --dport 53 -j ACCEPT
-    ipt -t filter -A OUTPUT -p tcp -m tcp --dport 80 -j ACCEPT
-    ipt -t filter -A OUTPUT -p udp -m udp --dport 137 -j ACCEPT
-    ipt -t filter -A OUTPUT -p udp -m udp --dport 138 -j ACCEPT
+    ipt4 -t filter -A OUTPUT -p udp -m udp --dport 67 -j ACCEPT
     ipt -t filter -A OUTPUT -p tcp -m tcp --dport 443 -j ACCEPT
     ipt -t filter -A OUTPUT -p udp -m udp --dport 1194 -j ACCEPT
-    ipt -t filter -A OUTPUT -p udp -m udp --dport 5353 -j ACCEPT
     ipt -t filter -A OUTPUT -j LOG --log-prefix "OUTPUT:"
     ipt -t filter -A OUTPUT -j DROP
 
@@ -92,11 +90,11 @@ firewall() {
     ipt6 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
          -p icmpv6 -m icmp6 --icmpv6-type 128 -j ACCEPT
     ipt6 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
-         -s fe80::/10 -p icmpv6 -m icmp6 --icmpv6-type 130/0 -j ACCEPT
+         -p icmpv6 -m icmp6 --icmpv6-type 130/0 -j ACCEPT
     ipt6 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
-         -s fe80::/10 -p icmpv6 -m icmp6 --icmpv6-type 131/0 -j ACCEPT
+         -p icmpv6 -m icmp6 --icmpv6-type 131/0 -j ACCEPT
     ipt6 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
-         -s fe80::/10 -p icmpv6 -m icmp6 --icmpv6-type 132/0 -j ACCEPT
+         -p icmpv6 -m icmp6 --icmpv6-type 132/0 -j ACCEPT
     ipt6 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
          -p icmpv6 -m icmp6 --icmpv6-type 134 -j ACCEPT
     ipt6 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
@@ -104,7 +102,7 @@ firewall() {
     ipt6 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
          -p icmpv6 -m icmp6 --icmpv6-type 136 -j ACCEPT
     ipt6 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
-         -s fe80::/10 -p icmpv6 -m icmp6 --icmpv6-type 143/0 -j ACCEPT
+         -p icmpv6 -m icmp6 --icmpv6-type 143/0 -j ACCEPT
     ipt4 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
          -p igmp -j ACCEPT
     ipt -t filter -A FORWARD -j LOG --log-prefix "FORWARD:"
