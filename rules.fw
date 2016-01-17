@@ -71,7 +71,7 @@ firewall() {
     ipt -t filter -A OUTPUT -p tcp -m tcp --dport 443 -j ACCEPT
     ipt -t filter -A OUTPUT -p udp -m udp --dport 1194 -j ACCEPT
     ipt -t filter -A OUTPUT -j LOG --log-prefix "OUTPUT:"
-    ipt -t filter -A OUTPUT -j DROP
+    ipt -t filter -A OUTPUT -j REJECT
 
     ipt -t filter -A FORWARD -p tcp -m tcp --tcp-flags ALL ALL -j DROP
     ipt -t filter -A FORWARD -p tcp -m tcp --tcp-flags SYN,FIN SYN,FIN -j DROP
