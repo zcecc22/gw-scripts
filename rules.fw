@@ -60,12 +60,14 @@ firewall() {
     ipt -t filter -A OUTPUT -o tun+ -j ACCEPT
     ipt -t filter -A OUTPUT -m addrtype --dst-type MULTICAST -j ACCEPT
     ipt4 -t filter -A OUTPUT -m addrtype --dst-type BROADCAST -j ACCEPT
+    ipt4 -t filter -A OUTPUT -p udp -m udp --dport 67 -j ACCEPT
+    ipt6 -t filter -A OUTPUT -s fc00::/6 -d fc00::/6 \
+         -p udp -m udp --dport 547 -j ACCEPT
     ipt4 -t filter -A OUTPUT -p icmp -j ACCEPT
     ipt6 -t filter -A OUTPUT -p icmpv6 -j ACCEPT
     ipt4 -t filter -A OUTPUT -p igmp -j ACCEPT
     ipt -t filter -A OUTPUT -p tcp -m tcp --dport 22 -j ACCEPT
     ipt -t filter -A OUTPUT -p udp -m udp --dport 53 -j ACCEPT
-    ipt4 -t filter -A OUTPUT -p udp -m udp --dport 67 -j ACCEPT
     ipt -t filter -A OUTPUT -p tcp -m tcp --dport 443 -j ACCEPT
     ipt -t filter -A OUTPUT -p udp -m udp --dport 1194 -j ACCEPT
     ipt -t filter -A OUTPUT -j LOG --log-prefix "OUTPUT:"
@@ -82,6 +84,10 @@ firewall() {
         -j ACCEPT
     ipt -t filter -A FORWARD -m physdev --physdev-in eth0 --physdev-out eth1 \
         -j ACCEPT
+    ipt -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
+        -m addrtype --dst-type MULTICAST -j ACCEPT
+    ipt4 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
+         -m addrtype --dst-type BROADCAST -j ACCEPT
     ipt4 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
          -p udp -m udp --dport 68 -j ACCEPT
     ipt6 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
