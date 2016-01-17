@@ -58,6 +58,7 @@ firewall() {
     ipt -t filter -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED \
         -j ACCEPT
     ipt -t filter -A OUTPUT -o tun+ -j ACCEPT
+    ipt4 -t filter -A OUTPUT -d 192.168.0.0/24 -j ACCEPT
     ipt -t filter -A OUTPUT -m addrtype --dst-type MULTICAST -j ACCEPT
     ipt4 -t filter -A OUTPUT -m addrtype --dst-type BROADCAST -j ACCEPT
     ipt4 -t filter -A OUTPUT -p udp -m udp --dport 67 -j ACCEPT
