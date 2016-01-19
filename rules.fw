@@ -1,5 +1,15 @@
 #!/bin/sh
 
+LAN_IF=eth0
+WAN_IF=eth1
+BRIDGE_IF=br0
+
+FROM_WAN_TO_LAN=-m physdev --physdev-in ${WAN_IF} --physdev-out ${LAN_IF}
+FROM_LAN_TO_WAN=-m physdev --physdev-in ${LAN_IF} --physdev-out ${WAN_IF}
+FROM_LAN=-m physdev --physdev-in ${LAN_IF}
+FROM_WAN=-m physdev --physdev-in ${WAN_IF}
+TO_BRIDGE=-o ${BRIDGE_IF}
+
 ipt() {
     iptables $* 2>&1
     ip6tables $* 2>&1
@@ -22,86 +32,117 @@ flush_firewall() {
     ipt -t mangle -X
 }
 
+icmp_allow() {
+    allow4 ${1} ${2} "-p icmp -m icmp --icmp-type 8"
+    allow6 ${1} ${2} "-p icmpv6 -m icmp6 --icmpv6-type 128"
+    allow6 ${1} ${2} "-p icmpv6 -m icmp6 --icmpv6-type 130/0"
+    allow6 ${1} ${2} "-p icmpv6 -m icmp6 --icmpv6-type 131/0"
+    allow6 ${1} ${2} "-p icmpv6 -m icmp6 --icmpv6-type 132/0"
+    allow6 ${1} ${2} "-p icmpv6 -m icmp6 --icmpv6-type 134"
+    allow6 ${1} ${2} "-p icmpv6 -m icmp6 --icmpv6-type 135"
+    allow6 ${1} ${2} "-p icmpv6 -m icmp6 --icmpv6-type 136"
+    allow6 ${1} ${2} "-p icmpv6 -m icmp6 --icmpv6-type 143/0"
+}
+
+dhcp_allow() {
+    allow4 ${1} ${2} "-p udp -m udp --dport 68"
+    allow6 ${1} ${2} "-s fc00::/6 -d fc00::/6 -p udp -m udp --dport 546"
+}
+
+broadcast_multicast_allow() {
+    allow ${1} ${2} "-m addrtype --dst-type MULTICAST"
+    allow4 ${1} ${2} "-m addrtype --dst-type BROADCAST"
+    allow4 ${1} ${2} "-p igmp"
+}
+
+invalid_flags_drop() {
+    drop ${1} "" "-p tcp -m tcp --tcp-flags ALL ALL"
+    drop ${1} "" "-p tcp -m tcp --tcp-flags SYN,FIN SYN,FIN"
+    drop ${1} "" "-p tcp -m tcp --tcp-flags SYN,RST SYN,RST"
+    drop ${1} "" "-p tcp -m tcp --tcp-flags ALL FIN,URG,PSH"
+    drop ${1} "" "-p tcp -m tcp --tcp-flags ALL NONE"
+}
+
+icmp_frags_drop() {
+    drop4 ${1} "" "-p icmp -f"
+}
+
+conntrack_allow() {
+    drop ${1} "" "-m conntrack --ctstate INVALID"
+    allow ${1} "" "-m conntrack --ctstate RELATED,ESTABLISHED"
+}
+
+footer_drop() {
+    ipt -t filter -A ${1} -j LOG --log-prefix "${1}:"
+    drop ${1} "" ""
+}
+
+loopback_allow() {
+    allow ${1} "-i lo" ""
+}
+
+allow() {
+    ipt -t filter -A ${1} ${2} ${3} -j ACCEPT
+}
+
+reject() {
+    ipt -t filter -A ${1} ${2} ${3} -j REJECT
+}
+
+drop() {
+    ipt -t filter -A ${1} ${2} ${3} -j DROP
+}
+
+allow4() {
+    ipt4 -t filter -A ${1} ${2} ${3} -j ACCEPT
+}
+
+reject4() {
+    ipt4 -t filter -A ${1} ${2} ${3} -j REJECT
+}
+
+drop4() {
+    ipt4 -t filter -A ${1} ${2} ${3} -j DROP
+}
+
+allow6() {
+    ipt6 -t filter -A ${1} ${2} ${3} -j ACCEPT
+}
+
+reject6() {
+    ipt6 -t filter -A ${1} ${2} ${3} -j REJECT
+}
+
+drop6() {
+    ipt6 -t filter -A ${1} ${2} ${3} -j DROP
+}
+
 firewall() {
     ipt -t raw -A PREROUTING -i lo -j NOTRACK
 
-    ipt -t filter -A INPUT -i lo -j ACCEPT
-    ipt -t filter -A INPUT -p tcp -m tcp --tcp-flags ALL ALL -j DROP
-    ipt -t filter -A INPUT -p tcp -m tcp --tcp-flags SYN,FIN SYN,FIN -j DROP
-    ipt -t filter -A INPUT -p tcp -m tcp --tcp-flags SYN,RST SYN,RST -j DROP
-    ipt -t filter -A INPUT -p tcp -m tcp --tcp-flags ALL FIN,URG,PSH -j DROP
-    ipt -t filter -A INPUT -p tcp -m tcp --tcp-flags ALL NONE -j DROP
-    ipt4 -t filter -A INPUT -p icmp -f -j DROP
-    ipt -t filter -A INPUT -m conntrack --ctstate INVALID -j DROP
-    ipt -t filter -A INPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
-    ipt -t filter -A INPUT -m physdev --physdev-in eth0 -j ACCEPT
-    ipt -t filter -A INPUT -m addrtype --dst-type MULTICAST -j ACCEPT
-    ipt4 -t filter -A INPUT -m addrtype --dst-type BROADCAST -j ACCEPT
-    ipt4 -t filter -A INPUT -p udp -m udp --dport 68 -j ACCEPT
-    ipt6 -t filter -A INPUT -s fc00::/6 -d fc00::/6 \
-         -p udp -m udp --dport 546 -j ACCEPT
-    ipt4 -t filter -A INPUT -p icmp -m icmp --icmp-type 8 -j ACCEPT
-    ipt6 -t filter -A INPUT -p icmpv6 -m icmp6 --icmpv6-type 128 -j ACCEPT
-    ipt6 -t filter -A INPUT -p icmpv6 -m icmp6 --icmpv6-type 130/0 -j ACCEPT
-    ipt6 -t filter -A INPUT -p icmpv6 -m icmp6 --icmpv6-type 131/0 -j ACCEPT
-    ipt6 -t filter -A INPUT -p icmpv6 -m icmp6 --icmpv6-type 132/0 -j ACCEPT
-    ipt6 -t filter -A INPUT -p icmpv6 -m icmp6 --icmpv6-type 134 -j ACCEPT
-    ipt6 -t filter -A INPUT -p icmpv6 -m icmp6 --icmpv6-type 135 -j ACCEPT
-    ipt6 -t filter -A INPUT -p icmpv6 -m icmp6 --icmpv6-type 136 -j ACCEPT
-    ipt6 -t filter -A INPUT -p icmpv6 -m icmp6 --icmpv6-type 143/0 -j ACCEPT
-    ipt4 -t filter -A INPUT -p igmp -j ACCEPT
-    ipt -t filter -A INPUT -j LOG --log-prefix "INPUT:"
-    ipt -t filter -A INPUT -j DROP
+    loopback_allow INPUT
+    invalid_flags_drop INPUT
+    icmp_frags_drop INPUT
+    conntrack_allow INPUT
+    broadcast_multicast_allow INPUT ${FROM_WAN}
+    dhcp_allow INPUT ${FROM_WAN}
+    icmp_allow INPUT ${FROM_WAN}
+    allow INPUT ${FROM_LAN} ""
+    footer_drop INPUT
 
-    ipt -t filter -A OUTPUT -o lo -j ACCEPT
-    ipt -t filter -A OUTPUT -m conntrack --ctstate INVALID -j DROP
-    ipt -t filter -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED \
-        -j ACCEPT
-    ipt -t filter -A OUTPUT -o br0 -p udp -m udp --dport 53 \
-        -m owner --uid-owner kino -j ACCEPT
-    ipt -t filter -A OUTPUT -o br0 -m owner --uid-owner kino -j REJECT
-
-    ipt -t filter -A FORWARD -p tcp -m tcp --tcp-flags ALL ALL -j DROP
-    ipt -t filter -A FORWARD -p tcp -m tcp --tcp-flags SYN,FIN SYN,FIN -j DROP
-    ipt -t filter -A FORWARD -p tcp -m tcp --tcp-flags SYN,RST SYN,RST -j DROP
-    ipt -t filter -A FORWARD -p tcp -m tcp --tcp-flags ALL FIN,URG,PSH -j DROP
-    ipt -t filter -A FORWARD -p tcp -m tcp --tcp-flags ALL NONE -j DROP
-    ipt4 -t filter -A FORWARD -p icmp -f -j DROP
-    ipt -t filter -A FORWARD -m conntrack --ctstate INVALID -j DROP
-    ipt -t filter -A FORWARD -m conntrack --ctstate ESTABLISHED,RELATED \
-        -j ACCEPT
-    ipt -t filter -A FORWARD -m physdev --physdev-in eth0 --physdev-out eth1 \
-        -j ACCEPT
-    ipt -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
-        -m addrtype --dst-type MULTICAST -j ACCEPT
-    ipt4 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
-         -m addrtype --dst-type BROADCAST -j ACCEPT
-    ipt4 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
-         -p udp -m udp --dport 68 -j ACCEPT
-    ipt6 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
-         -s fc00::/6 -d fc00::/6 -p udp -m udp --dport 546 -j ACCEPT
-    ipt4 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
-         -p icmp -m icmp --icmp-type 8 -j ACCEPT
-    ipt6 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
-         -p icmpv6 -m icmp6 --icmpv6-type 128 -j ACCEPT
-    ipt6 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
-         -p icmpv6 -m icmp6 --icmpv6-type 130/0 -j ACCEPT
-    ipt6 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
-         -p icmpv6 -m icmp6 --icmpv6-type 131/0 -j ACCEPT
-    ipt6 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
-         -p icmpv6 -m icmp6 --icmpv6-type 132/0 -j ACCEPT
-    ipt6 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
-         -p icmpv6 -m icmp6 --icmpv6-type 134 -j ACCEPT
-    ipt6 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
-         -p icmpv6 -m icmp6 --icmpv6-type 135 -j ACCEPT
-    ipt6 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
-         -p icmpv6 -m icmp6 --icmpv6-type 136 -j ACCEPT
-    ipt6 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
-         -p icmpv6 -m icmp6 --icmpv6-type 143/0 -j ACCEPT
-    ipt4 -t filter -A FORWARD -m physdev --physdev-in eth1 --physdev-out eth0 \
-         -p igmp -j ACCEPT
-    ipt -t filter -A FORWARD -j LOG --log-prefix "FORWARD:"
-    ipt -t filter -A FORWARD -j DROP
+    invalid_flags_drop FORWARD
+    icmp_frags_drop FORWARD
+    conntrack_allow FORWARD
+    broadcast_multicast_allow FORWARD ${FROM_WAN_TO_LAN}
+    dhcp_allow FORWARD ${FROM_WAN_TO_LAN}
+    icmp_allow FORWARD ${FROM_WAN_TO_LAN}
+    allow FORWARD ${FROM_LAN_TO_WAN} ""
+    footer_drop FORWARD
+    
+    loopback_allow OUTPUT
+    conntrack_allow OUTPUT
+    allow OUTPUT ${TO_BRIDGE} "-p udp -m udp --dport 53 -m owner --uid-owner kino"
+    reject OUTPUT ${TO_BRIDGE} "-m owner --uid-owner kino"
 }
 
 flush_firewall
