@@ -72,7 +72,7 @@ conntrack_allow() {
     allow ${1} "" "-m conntrack --ctstate RELATED,ESTABLISHED"
 }
 
-footer_drop() {
+footer_drop_all() {
     ipt -t filter -A ${1} -j LOG --log-prefix "${1}:"
     drop ${1} "" ""
 }
@@ -128,7 +128,7 @@ firewall() {
     dhcp_allow INPUT ${FROM_WAN}
     icmp_allow INPUT ${FROM_WAN}
     allow INPUT ${FROM_LAN} ""
-    footer_drop INPUT
+    footer_drop_all INPUT
 
     invalid_flags_drop FORWARD
     icmp_frags_drop FORWARD
@@ -137,7 +137,7 @@ firewall() {
     dhcp_allow FORWARD ${FROM_WAN_TO_LAN}
     icmp_allow FORWARD ${FROM_WAN_TO_LAN}
     allow FORWARD ${FROM_LAN_TO_WAN} ""
-    footer_drop FORWARD
+    footer_drop_all FORWARD
     
     loopback_allow OUTPUT
     conntrack_allow OUTPUT
