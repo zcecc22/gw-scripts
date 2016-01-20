@@ -4,11 +4,14 @@ LAN_IF=eth0
 WAN_IF=eth1
 BRIDGE_IF=br0
 
-FROM_WAN_TO_LAN=-m physdev --physdev-in ${WAN_IF} --physdev-out ${LAN_IF}
-FROM_LAN_TO_WAN=-m physdev --physdev-in ${LAN_IF} --physdev-out ${WAN_IF}
-FROM_LAN=-m physdev --physdev-in ${LAN_IF}
-FROM_WAN=-m physdev --physdev-in ${WAN_IF}
-TO_BRIDGE=-o ${BRIDGE_IF}
+FROM_WAN_TO_LAN="-m physdev --physdev-in ${WAN_IF} --physdev-out ${LAN_IF}"
+FROM_LAN_TO_WAN="-m physdev --physdev-in ${LAN_IF} --physdev-out ${WAN_IF}"
+FROM_LAN="-m physdev --physdev-in ${LAN_IF}"
+FROM_WAN="-m physdev --physdev-in ${WAN_IF}"
+FROM_BRIDGE="-i ${BRIDGE_IF}"
+TO_BRIDGE="-o ${BRIDGE_IF}"
+FROM_LO="-i lo"
+TO_LO="-o lo"
 
 ipt() {
     iptables $* 2>&1
@@ -33,116 +36,112 @@ flush_firewall() {
 }
 
 icmp_allow() {
-    allow4 ${1} ${2} "-p icmp -m icmp --icmp-type 8"
-    allow6 ${1} ${2} "-p icmpv6 -m icmp6 --icmpv6-type 128"
-    allow6 ${1} ${2} "-p icmpv6 -m icmp6 --icmpv6-type 130/0"
-    allow6 ${1} ${2} "-p icmpv6 -m icmp6 --icmpv6-type 131/0"
-    allow6 ${1} ${2} "-p icmpv6 -m icmp6 --icmpv6-type 132/0"
-    allow6 ${1} ${2} "-p icmpv6 -m icmp6 --icmpv6-type 134"
-    allow6 ${1} ${2} "-p icmpv6 -m icmp6 --icmpv6-type 135"
-    allow6 ${1} ${2} "-p icmpv6 -m icmp6 --icmpv6-type 136"
-    allow6 ${1} ${2} "-p icmpv6 -m icmp6 --icmpv6-type 143/0"
+    allow4 "$1" "$2" "-p icmp -m icmp --icmp-type 8"
+    allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 128"
+    allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 130/0"
+    allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 131/0"
+    allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 132/0"
+    allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 134"
+    allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 135"
+    allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 136"
+    allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 143/0"
 }
 
 dhcp_allow() {
-    allow4 ${1} ${2} "-p udp -m udp --dport 68"
-    allow6 ${1} ${2} "-s fc00::/6 -d fc00::/6 -p udp -m udp --dport 546"
+    allow4 "$1" "$2" "-p udp -m udp --dport 68"
+    allow6 "$1" "$2" "-s fc00::/6 -d fc00::/6 -p udp -m udp --dport 546"
 }
 
 broadcast_multicast_allow() {
-    allow ${1} ${2} "-m addrtype --dst-type MULTICAST"
-    allow4 ${1} ${2} "-m addrtype --dst-type BROADCAST"
-    allow4 ${1} ${2} "-p igmp"
+    allow "$1" "$2" "-m addrtype --dst-type MULTICAST"
+    allow4 "$1" "$2" "-m addrtype --dst-type BROADCAST"
+    allow4 "$1" "$2" "-p igmp"
 }
 
 invalid_flags_drop() {
-    drop ${1} "" "-p tcp -m tcp --tcp-flags ALL ALL"
-    drop ${1} "" "-p tcp -m tcp --tcp-flags SYN,FIN SYN,FIN"
-    drop ${1} "" "-p tcp -m tcp --tcp-flags SYN,RST SYN,RST"
-    drop ${1} "" "-p tcp -m tcp --tcp-flags ALL FIN,URG,PSH"
-    drop ${1} "" "-p tcp -m tcp --tcp-flags ALL NONE"
+    drop "$1"  "-p tcp -m tcp --tcp-flags ALL ALL"
+    drop "$1"  "-p tcp -m tcp --tcp-flags SYN,FIN SYN,FIN"
+    drop "$1"  "-p tcp -m tcp --tcp-flags SYN,RST SYN,RST"
+    drop "$1"  "-p tcp -m tcp --tcp-flags ALL FIN,URG,PSH"
+    drop "$1"  "-p tcp -m tcp --tcp-flags ALL NONE"
 }
 
 icmp_frags_drop() {
-    drop4 ${1} "" "-p icmp -f"
+    drop4 "$1"  "-p icmp -f"
 }
 
 conntrack_allow() {
-    drop ${1} "" "-m conntrack --ctstate INVALID"
-    allow ${1} "" "-m conntrack --ctstate RELATED,ESTABLISHED"
+    drop "$1"  "-m conntrack --ctstate INVALID"
+    allow "$1"  "-m conntrack --ctstate RELATED,ESTABLISHED"
 }
 
 footer_drop_all() {
-    ipt -t filter -A ${1} -j LOG --log-prefix "${1}:"
-    drop ${1} "" ""
-}
-
-loopback_allow() {
-    allow ${1} "-i lo" ""
+    ipt -t filter -A "$1" -j LOG --log-prefix $1":"
+    drop "$1"  
 }
 
 allow() {
-    ipt -t filter -A ${1} ${2} ${3} -j ACCEPT
+    ipt -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j ACCEPT
 }
 
 reject() {
-    ipt -t filter -A ${1} ${2} ${3} -j REJECT
+    ipt -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j REJECT
 }
 
 drop() {
-    ipt -t filter -A ${1} ${2} ${3} -j DROP
+    ipt -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j DROP
 }
 
 allow4() {
-    ipt4 -t filter -A ${1} ${2} ${3} -j ACCEPT
+    ipt4 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j ACCEPT
 }
 
 reject4() {
-    ipt4 -t filter -A ${1} ${2} ${3} -j REJECT
+    ipt4 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j REJECT
 }
 
 drop4() {
-    ipt4 -t filter -A ${1} ${2} ${3} -j DROP
+    ipt4 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j DROP
 }
 
 allow6() {
-    ipt6 -t filter -A ${1} ${2} ${3} -j ACCEPT
+    ipt6 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j ACCEPT
 }
 
 reject6() {
-    ipt6 -t filter -A ${1} ${2} ${3} -j REJECT
+    ipt6 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j REJECT
 }
 
 drop6() {
-    ipt6 -t filter -A ${1} ${2} ${3} -j DROP
+    ipt6 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j DROP
 }
 
 firewall() {
     ipt -t raw -A PREROUTING -i lo -j NOTRACK
 
-    loopback_allow INPUT
+    allow INPUT "$FROM_LO"
     invalid_flags_drop INPUT
     icmp_frags_drop INPUT
     conntrack_allow INPUT
-    broadcast_multicast_allow INPUT ${FROM_WAN}
-    dhcp_allow INPUT ${FROM_WAN}
-    icmp_allow INPUT ${FROM_WAN}
-    allow INPUT ${FROM_LAN} ""
+    broadcast_multicast_allow INPUT "$FROM_WAN"
+    dhcp_allow INPUT "$FROM_WAN"
+    icmp_allow INPUT "$FROM_WAN"
+    allow INPUT "$FROM_LAN" 
     footer_drop_all INPUT
 
     invalid_flags_drop FORWARD
     icmp_frags_drop FORWARD
     conntrack_allow FORWARD
-    broadcast_multicast_allow FORWARD ${FROM_WAN_TO_LAN}
-    dhcp_allow FORWARD ${FROM_WAN_TO_LAN}
-    icmp_allow FORWARD ${FROM_WAN_TO_LAN}
-    allow FORWARD ${FROM_LAN_TO_WAN} ""
+    broadcast_multicast_allow FORWARD "$FROM_WAN_TO_LAN"
+    dhcp_allow FORWARD "$FROM_WAN_TO_LAN"
+    icmp_allow FORWARD "$FROM_WAN_TO_LAN"
+    allow FORWARD "$FROM_LAN_TO_WAN" 
     footer_drop_all FORWARD
     
-    loopback_allow OUTPUT
+    allow OUTPUT "$TO_LO"
     conntrack_allow OUTPUT
-    allow OUTPUT ${TO_BRIDGE} "-p udp -m udp --dport 53 -m owner --uid-owner kino"
-    reject OUTPUT ${TO_BRIDGE} "-m owner --uid-owner kino"
+    allow OUTPUT "$TO_BRIDGE" "-p udp -m udp --dport 53 -m owner --uid-owner kino"
+    reject OUTPUT "$TO_BRIDGE" "-m owner --uid-owner kino"
 }
 
 flush_firewall
