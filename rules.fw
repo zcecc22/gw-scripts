@@ -35,7 +35,7 @@ flush_firewall() {
     ipt -t mangle -X
 }
 
-icmp_allow() {
+allow_icmp_in() {
     allow4 "$1" "$2" "-p icmp -m icmp --icmp-type 8"
     allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 128"
     allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 130/0"
@@ -47,18 +47,18 @@ icmp_allow() {
     allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 143/0"
 }
 
-dhcp_allow() {
+allow_dhcp_in() {
     allow4 "$1" "$2" "-p udp -m udp --dport 68"
     allow6 "$1" "$2" "-s fc00::/6 -d fc00::/6 -p udp -m udp --dport 546"
 }
 
-broadcast_multicast_allow() {
+allow_broadcast_multicast_in() {
     allow "$1" "$2" "-m addrtype --dst-type MULTICAST"
     allow4 "$1" "$2" "-m addrtype --dst-type BROADCAST"
     allow4 "$1" "$2" "-p igmp"
 }
 
-invalid_flags_drop() {
+drop_invalid_tcp_flags_from() {
     drop "$1"  "-p tcp -m tcp --tcp-flags ALL ALL"
     drop "$1"  "-p tcp -m tcp --tcp-flags SYN,FIN SYN,FIN"
     drop "$1"  "-p tcp -m tcp --tcp-flags SYN,RST SYN,RST"
@@ -66,16 +66,16 @@ invalid_flags_drop() {
     drop "$1"  "-p tcp -m tcp --tcp-flags ALL NONE"
 }
 
-icmp_frags_drop() {
+drop_icmp_frags_from() {
     drop4 "$1"  "-p icmp -f"
 }
 
-conntrack_allow() {
+allow_conntrack_in() {
     drop "$1"  "-m conntrack --ctstate INVALID"
     allow "$1"  "-m conntrack --ctstate RELATED,ESTABLISHED"
 }
 
-footer_drop_all() {
+drop_log_all_from() {
     ipt -t filter -A "$1" -j LOG --log-prefix $1":"
     drop "$1"  
 }
@@ -120,26 +120,26 @@ firewall() {
     ipt -t raw -A PREROUTING -i lo -j NOTRACK
 
     allow INPUT "$FROM_LO"
-    invalid_flags_drop INPUT
-    icmp_frags_drop INPUT
-    conntrack_allow INPUT
-    broadcast_multicast_allow INPUT "$FROM_WAN"
-    dhcp_allow INPUT "$FROM_WAN"
-    icmp_allow INPUT "$FROM_WAN"
+    drop_invalid_tcp_flags_from INPUT
+    drop_icmp_frags_from INPUT
+    allow_conntrack_in INPUT
+    allow_broadcast_multicast_in INPUT "$FROM_WAN"
+    allow_dhcp_in INPUT "$FROM_WAN"
+    allow_icmp_in INPUT "$FROM_WAN"
     allow INPUT "$FROM_LAN" 
-    footer_drop_all INPUT
+    drop_log_all_from INPUT
 
-    invalid_flags_drop FORWARD
-    icmp_frags_drop FORWARD
-    conntrack_allow FORWARD
-    broadcast_multicast_allow FORWARD "$FROM_WAN_TO_LAN"
-    dhcp_allow FORWARD "$FROM_WAN_TO_LAN"
-    icmp_allow FORWARD "$FROM_WAN_TO_LAN"
+    drop_invalid_tcp_flags_from FORWARD
+    drop_icmp_frags_from FORWARD
+    allow_conntrack_in FORWARD
+    allow_broadcast_multicast_in FORWARD "$FROM_WAN_TO_LAN"
+    allow_dhcp_in FORWARD "$FROM_WAN_TO_LAN"
+    allow_icmp_in FORWARD "$FROM_WAN_TO_LAN"
     allow FORWARD "$FROM_LAN_TO_WAN" 
-    footer_drop_all FORWARD
+    drop_log_all_from FORWARD
     
     allow OUTPUT "$TO_LO"
-    conntrack_allow OUTPUT
+    allow_conntrack_in OUTPUT
     allow OUTPUT "$TO_BRIDGE" "-p udp -m udp --dport 53 -m owner --uid-owner kino"
     reject OUTPUT "$TO_BRIDGE" "-m owner --uid-owner kino"
 }
