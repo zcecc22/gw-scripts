@@ -4,12 +4,12 @@ LAN_IF=eth0
 WAN_IF=eth1
 BRIDGE_IF=br0
 
-FROM_WAN_TO_LAN="-m physdev --physdev-in ${WAN_IF} --physdev-out ${LAN_IF}"
-FROM_LAN_TO_WAN="-m physdev --physdev-in ${LAN_IF} --physdev-out ${WAN_IF}"
-FROM_LAN="-m physdev --physdev-in ${LAN_IF}"
-FROM_WAN="-m physdev --physdev-in ${WAN_IF}"
 FROM_BRIDGE="-i ${BRIDGE_IF}"
 TO_BRIDGE="-o ${BRIDGE_IF}"
+FROM_WAN_TO_LAN="${FROM_BRIDGE} -m physdev --physdev-in ${WAN_IF} --physdev-out ${LAN_IF}"
+FROM_LAN_TO_WAN="${FROM_BRIDGE} -m physdev --physdev-in ${LAN_IF} --physdev-out ${WAN_IF}"
+FROM_LAN="${FROM_BRIDGE} -m physdev --physdev-in ${LAN_IF}"
+FROM_WAN="${FROM_BRIDGE} -m physdev --physdev-in ${WAN_IF}"
 FROM_LO="-i lo"
 TO_LO="-o lo"
 
@@ -35,16 +35,27 @@ flush_firewall() {
     ipt -t mangle -X
 }
 
+policies() {
+    ipt -t filter -P INPUT DROP
+    ipt -t filter -P OUTPUT ACCEPT
+    ipt -t filter -P FORWARD DROP
+}
+
 allow_icmp_in() {
     allow4 "$1" "$2" "-p icmp -m icmp --icmp-type 8"
     allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 128"
-    allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 130/0"
-    allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 131/0"
-    allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 132/0"
+    allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 130"
+    allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 131"
+    allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 132"
     allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 134"
     allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 135"
     allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 136"
-    allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 143/0"
+    allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 139"
+    allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 141"
+    allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 142"
+    allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 143"
+    allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 144"
+    allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 145"
 }
 
 allow_dhcp_in() {
@@ -54,30 +65,30 @@ allow_dhcp_in() {
 
 allow_broadcast_multicast_in() {
     allow "$1" "$2" "-m addrtype --dst-type MULTICAST"
+    allow "$1" "$2" "-m addrtype --dst-type ANYCAST"
     allow4 "$1" "$2" "-m addrtype --dst-type BROADCAST"
     allow4 "$1" "$2" "-p igmp"
 }
 
 drop_invalid_tcp_flags_from() {
-    drop "$1"  "-p tcp -m tcp --tcp-flags ALL ALL"
-    drop "$1"  "-p tcp -m tcp --tcp-flags SYN,FIN SYN,FIN"
-    drop "$1"  "-p tcp -m tcp --tcp-flags SYN,RST SYN,RST"
-    drop "$1"  "-p tcp -m tcp --tcp-flags ALL FIN,URG,PSH"
-    drop "$1"  "-p tcp -m tcp --tcp-flags ALL NONE"
+    drop "$1" "-p tcp -m tcp --tcp-flags ALL ALL"
+    drop "$1" "-p tcp -m tcp --tcp-flags SYN,FIN SYN,FIN"
+    drop "$1" "-p tcp -m tcp --tcp-flags SYN,RST SYN,RST"
+    drop "$1" "-p tcp -m tcp --tcp-flags ALL FIN,URG,PSH"
+    drop "$1" "-p tcp -m tcp --tcp-flags ALL NONE"
 }
 
 drop_icmp_frags_from() {
-    drop4 "$1"  "-p icmp -f"
+    drop4 "$1" "-p icmp -f"
 }
 
 allow_conntrack_in() {
-    drop "$1"  "-m conntrack --ctstate INVALID"
-    allow "$1"  "-m conntrack --ctstate RELATED,ESTABLISHED"
+    drop "$1" "-m conntrack --ctstate INVALID"
+    allow "$1" "-m conntrack --ctstate RELATED,ESTABLISHED"
 }
 
-drop_log_all_from() {
-    ipt -t filter -A "$1" -j LOG --log-prefix $1":"
-    drop "$1"  
+log_all_from() {
+    ipt -t filter -A "$1" -j LOG --log-prefix "$1: "
 }
 
 allow() {
@@ -117,6 +128,7 @@ drop6() {
 }
 
 firewall() {
+    policies
     ipt -t raw -A PREROUTING -i lo -j NOTRACK
 
     allow INPUT "$FROM_LO"
@@ -126,8 +138,8 @@ firewall() {
     allow_broadcast_multicast_in INPUT "$FROM_WAN"
     allow_dhcp_in INPUT "$FROM_WAN"
     allow_icmp_in INPUT "$FROM_WAN"
-    allow INPUT "$FROM_LAN" 
-    drop_log_all_from INPUT
+    allow INPUT "$FROM_LAN"
+    log_all_from INPUT
 
     drop_invalid_tcp_flags_from FORWARD
     drop_icmp_frags_from FORWARD
@@ -135,9 +147,9 @@ firewall() {
     allow_broadcast_multicast_in FORWARD "$FROM_WAN_TO_LAN"
     allow_dhcp_in FORWARD "$FROM_WAN_TO_LAN"
     allow_icmp_in FORWARD "$FROM_WAN_TO_LAN"
-    allow FORWARD "$FROM_LAN_TO_WAN" 
-    drop_log_all_from FORWARD
-    
+    allow FORWARD "$FROM_LAN_TO_WAN"
+    log_all_from FORWARD
+
     allow OUTPUT "$TO_LO"
     allow_conntrack_in OUTPUT
     allow OUTPUT "$TO_BRIDGE" "-p udp -m udp --dport 53 -m owner --uid-owner kino"
