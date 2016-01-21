@@ -152,8 +152,8 @@ firewall() {
 
     allow OUTPUT "$TO_LO"
     allow_conntrack_in OUTPUT
-    allow OUTPUT "$TO_BRIDGE" "-p udp -m udp --dport 53 -m owner --uid-owner kino"
-    reject OUTPUT "$TO_BRIDGE" "-m owner --uid-owner kino"
+    allow OUTPUT "$TO_BRIDGE" "-p udp -m udp --dport 53 -m owner --uid-owner zcecc22"
+    reject OUTPUT "$TO_BRIDGE" "-m owner --uid-owner zcecc22"
 }
 
 flush_firewall
