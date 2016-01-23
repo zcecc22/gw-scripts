@@ -6,8 +6,8 @@ BRIDGE_IF=br0
 
 FROM_BRIDGE="-i ${BRIDGE_IF}"
 TO_BRIDGE="-o ${BRIDGE_IF}"
-FROM_WAN_TO_LAN="${FROM_BRIDGE} -m physdev --physdev-in ${WAN_IF} --physdev-out ${LAN_IF}"
-FROM_LAN_TO_WAN="${FROM_BRIDGE} -m physdev --physdev-in ${LAN_IF} --physdev-out ${WAN_IF}"
+FROM_WAN_TO_LAN="${FROM_BRIDGE} ${TO_BRIDGE} -m physdev --physdev-in ${WAN_IF} --physdev-out ${LAN_IF}"
+FROM_LAN_TO_WAN="${FROM_BRIDGE} ${TO_BRIDGE} -m physdev --physdev-in ${LAN_IF} --physdev-out ${WAN_IF}"
 FROM_LAN="${FROM_BRIDGE} -m physdev --physdev-in ${LAN_IF}"
 FROM_WAN="${FROM_BRIDGE} -m physdev --physdev-in ${WAN_IF}"
 FROM_LO="-i lo"
