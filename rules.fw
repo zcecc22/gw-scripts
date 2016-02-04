@@ -87,7 +87,7 @@ allow_conntrack_in() {
     allow "$1" "-m conntrack --ctstate RELATED,ESTABLISHED"
 }
 
-log_all_from() {
+log_all_in() {
     ipt -t filter -A "$1" -j LOG --log-prefix "$1: "
 }
 
@@ -140,7 +140,7 @@ firewall() {
     allow_icmp_in INPUT "$FROM_WAN"
     allow INPUT "$FROM_WAN" "-p tcp -m tcp --dport 22"
     allow INPUT "$FROM_LAN"
-    log_all_from INPUT
+    log_all_in INPUT
 
     drop_invalid_tcp_flags_from FORWARD
     drop_icmp_frags_from FORWARD
@@ -149,7 +149,7 @@ firewall() {
     allow_dhcp_in FORWARD "$FROM_WAN_TO_LAN"
     allow_icmp_in FORWARD "$FROM_WAN_TO_LAN"
     allow FORWARD "$FROM_LAN_TO_WAN"
-    log_all_from FORWARD
+    log_all_in FORWARD
 
     allow OUTPUT "$TO_LO"
     allow_conntrack_in OUTPUT
