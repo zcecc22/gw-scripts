@@ -8,8 +8,7 @@ UPLINK=$(( 6000 * 98 / 100 ))
 QDISC=fq_codel
 TC=tc
 IP=ip
-ELIMIT=100
-ILIMIT=100
+QUEUE_LENGTH=500
 EFLOWS=1024
 IFLOWS=1024
 EECN=noecn
@@ -21,6 +20,7 @@ HZ=1000
 PACKETSIZE=1514
 BQL=${PACKETSIZE}
 MINTARGET=2000
+
 EBURST=$(( ( ${UPLINK} * 1000 / ( ${HZ} * 8 ) ) + 1 ))
 [ ${EBURST} -lt $(( ${PACKETSIZE} + 1 )) ] && EBURST=$(( ${PACKETSIZE} + 1 ))
 IBURST=$(( ( ${DOWNLINK} * 1000 / ( ${HZ} * 8 ) ) + 1 ))
@@ -58,10 +58,10 @@ eth_setup() {
 egress_qdisc() {
     $TC qdisc del dev ${WAN} root 2> /dev/null
     $TC qdisc add dev ${WAN} root handle 1: tbf rate ${UPLINK}kbit \
-        burst ${EBURST}B limit $(( ${ELIMIT} * ${PACKETSIZE} ))B
+        burst ${EBURST}B latency ${QUEUE_LENGTH}ms
 
     $TC qdisc add dev ${WAN} parent 1: handle 11: ${QDISC} \
-        `get_target ${UPLINK}` limit ${ELIMIT} ${EECN} flows ${EFLOWS} \
+        `get_target ${UPLINK}` ${EECN} flows ${EFLOWS} \
         quantum ${EQUANTUM} interval ${INTERVAL}ms
 }
 
@@ -73,10 +73,10 @@ ingress_qdisc() {
 
     $TC qdisc del dev ${DEV} root 2> /dev/null
     $TC qdisc add dev ${DEV} root handle 1: tbf rate ${DOWNLINK}kbit \
-        burst ${IBURST}B limit $(( ${ILIMIT} * ${PACKETSIZE} ))B
+        burst ${IBURST}B latency ${QUEUE_LENGTH}ms
 
     $TC qdisc add dev ${DEV} parent 1: handle 11: ${QDISC} \
-        `get_target ${DOWNLINK}` limit ${ILIMIT} ${IECN} flows ${IFLOWS} \
+        `get_target ${DOWNLINK}` ${IECN} flows ${IFLOWS} \
         quantum ${IQUANTUM} interval ${INTERVAL}ms
 
     $IP link set dev ${DEV} up
