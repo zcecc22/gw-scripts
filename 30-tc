@@ -37,8 +37,8 @@ flush_qdisc() {
 }
 
 get_target() {
-    # target computation based packet size (mtu) and link speed + 20% .
-    TARGET=$(( ${PACKETSIZE} * 1000 * 1000 * 12 / ( ${1} * 1000 * 10 / 8 ) ))
+    # target computation based on packet size (mtu) and link speed + 20% .
+    TARGET=$(( ${PACKETSIZE} * 8 * 1000 * 12 / ( ${1} * 10 ) ))
     echo target ${TARGET}us
 }
 
