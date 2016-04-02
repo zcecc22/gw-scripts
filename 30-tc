@@ -12,13 +12,14 @@ QUEUE_LENGTH=500 # in ms
 EFLOWS=1024 # flow count as power of 2
 IFLOWS=1024 # flow count as power of 2
 EECN=noecn
-IECN=ecn
+IECN=noecn
 EQUANTUM=300 # in bytes
 IQUANTUM=300 # in bytes
-INTERVAL=50 # in ms
+INTERVAL=20 # in ms
 HZ=1000 # in hz
 PACKETSIZE=1514 # in bytes
 BQL=${PACKETSIZE} # in bytes
+MINTARGET=1500 # in us
 
 ELIMIT=$(( ${QUEUE_LENGTH} * ${UPLINK} / ( ${PACKETSIZE} * 8 ) )) # packet count
 ILIMIT=$(( ${QUEUE_LENGTH} * ${DOWNLINK} / ( ${PACKETSIZE} * 8 ) )) # packet count
@@ -37,8 +38,9 @@ flush_qdisc() {
 }
 
 get_target() {
-    # target computation based on packet size (mtu) and link speed + 20% .
-    TARGET=$(( ${PACKETSIZE} * 8 * 1000 * 12 / ( ${1} * 10 ) ))
+    # target computation based on packet size (mtu).
+    TARGET=$(( ${PACKETSIZE} * 8 * 1000 / ${1} ))
+    [ ${TARGET} -lt ${MINTARGET} ] && TARGET=${MINTARGET}
     echo target ${TARGET}us
 }
 
