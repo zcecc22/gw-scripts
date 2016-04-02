@@ -15,11 +15,11 @@ EECN=noecn
 IECN=noecn
 EQUANTUM=300 # in bytes
 IQUANTUM=300 # in bytes
-INTERVAL=20 # in ms
+INTERVAL=30 # in ms
 HZ=1000 # in hz
 PACKETSIZE=1514 # in bytes
 BQL=${PACKETSIZE} # in bytes
-MINTARGET=1500 # in us
+TARGETMARGIN=350 # in %
 
 ELIMIT=$(( ${QUEUE_LENGTH} * ${UPLINK} / ( ${PACKETSIZE} * 8 ) )) # packet count
 ILIMIT=$(( ${QUEUE_LENGTH} * ${DOWNLINK} / ( ${PACKETSIZE} * 8 ) )) # packet count
@@ -39,8 +39,7 @@ flush_qdisc() {
 
 get_target() {
     # target computation based on packet size (mtu).
-    TARGET=$(( ${PACKETSIZE} * 8 * 1000 / ${1} ))
-    [ ${TARGET} -lt ${MINTARGET} ] && TARGET=${MINTARGET}
+    TARGET=$(( ${PACKETSIZE} * 8 * ${TARGETMARGIN} * 1000 / ( 100 * ${1} ) ))
     echo target ${TARGET}us
 }
 
