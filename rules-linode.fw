@@ -122,6 +122,7 @@ firewall() {
     allow_dhcp_in INPUT "$FROM_WAN"
     allow_icmp_in INPUT "$FROM_WAN"
     allow INPUT "$FROM_WAN" "-p tcp -m tcp --dport 22"
+    allow INPUT "$FROM_WAN" "-p tcp -m tcp --dport 443"
 }
 
 flush_firewall
