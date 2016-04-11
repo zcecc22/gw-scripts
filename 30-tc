@@ -15,11 +15,13 @@ EECN=ecn
 IECN=ecn
 EQUANTUM=300 # in bytes
 IQUANTUM=300 # in bytes
-INTERVAL=20 # in ms
+EINTERVAL=50 # in ms
+IINTERVAL=50 # in ms
 HZ=1000 # in hz
 PACKET_SIZE=1514 # in bytes
 BQL=${PACKET_SIZE} # in bytes
-TARGET_MARGIN=200 # in %
+ETARGET_MARGIN=100 # in %
+ITARGET_MARGIN=800 # in %
 
 ELIMIT=$(( ${QUEUE_LENGTH} * ${UPLINK} / ( ${PACKET_SIZE} * 8 ) )) # packet count
 ILIMIT=$(( ${QUEUE_LENGTH} * ${DOWNLINK} / ( ${PACKET_SIZE} * 8 ) )) # packet count
@@ -37,9 +39,15 @@ flush_qdisc() {
     $IP link delete ${DEV} type ifb 2> /dev/null
 }
 
-get_target() {
+get_etarget() {
     # target computation based on packet size (mtu).
-    TARGET=$(( ${PACKET_SIZE} * 8 * ${TARGET_MARGIN} * 1000 / ( 100 * ${1} ) ))
+    TARGET=$(( ${PACKET_SIZE} * 8 * ${ETARGET_MARGIN} * 1000 / ( 100 * ${1} ) ))
+    echo target ${TARGET}us
+}
+
+get_itarget() {
+    # target computation based on packet size (mtu).
+    TARGET=$(( ${PACKET_SIZE} * 8 * ${ITARGET_MARGIN} * 1000 / ( 100 * ${1} ) ))
     echo target ${TARGET}us
 }
 
@@ -66,8 +74,8 @@ egress_qdisc() {
         burst ${EBURST}B latency ${QUEUE_LENGTH}ms
 
     $TC qdisc add dev ${WAN} parent 1: handle 11: ${QDISC} \
-        `get_target ${UPLINK}` limit ${ELIMIT} ${EECN} flows ${EFLOWS} \
-        quantum ${EQUANTUM} interval ${INTERVAL}ms
+        `get_etarget ${UPLINK}` limit ${ELIMIT} ${EECN} flows ${EFLOWS} \
+        quantum ${EQUANTUM} interval ${EINTERVAL}ms
 }
 
 ingress_qdisc() {
@@ -81,8 +89,8 @@ ingress_qdisc() {
         burst ${IBURST}B latency ${QUEUE_LENGTH}ms
 
     $TC qdisc add dev ${DEV} parent 1: handle 11: ${QDISC} \
-        `get_target ${DOWNLINK}` limit ${ILIMIT} ${IECN} flows ${IFLOWS} \
-        quantum ${IQUANTUM} interval ${INTERVAL}ms
+        `get_itarget ${DOWNLINK}` limit ${ILIMIT} ${IECN} flows ${IFLOWS} \
+        quantum ${IQUANTUM} interval ${IINTERVAL}ms
 
     $IP link set dev ${DEV} up
 
