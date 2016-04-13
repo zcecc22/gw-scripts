@@ -15,13 +15,13 @@ EECN=ecn
 IECN=ecn
 EQUANTUM=300 # in bytes
 IQUANTUM=300 # in bytes
-EINTERVAL=50 # in ms
-IINTERVAL=50 # in ms
+EINTERVAL=20 # in ms
+IINTERVAL=20 # in ms
 HZ=1000 # in hz
 PACKET_SIZE=1514 # in bytes
 BQL=${PACKET_SIZE} # in bytes
-ETARGET_MARGIN=100 # in %
-ITARGET_MARGIN=800 # in %
+ETARGET_MARGIN=150 # in %
+ITARGET_MARGIN=150 # in %
 
 ELIMIT=$(( ${QUEUE_LENGTH} * ${UPLINK} / ( ${PACKET_SIZE} * 8 ) )) # packet count
 ILIMIT=$(( ${QUEUE_LENGTH} * ${DOWNLINK} / ( ${PACKET_SIZE} * 8 ) )) # packet count
