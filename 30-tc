@@ -8,20 +8,18 @@ UPLINK=$(( 6000 * 95 / 100 )) # in kbps
 QDISC=fq_codel
 TC=tc
 IP=ip
-QUEUE_LENGTH=250 # in ms
+QUEUE_LENGTH=1000 # in ms
 EFLOWS=1024 # flow count as power of 2
 IFLOWS=1024 # flow count as power of 2
 EECN=ecn
 IECN=ecn
-EQUANTUM=300 # in bytes
-IQUANTUM=300 # in bytes
-EINTERVAL=20 # in ms
-IINTERVAL=20 # in ms
+INTERVAL=50 # in ms
 HZ=1000 # in hz
 PACKET_SIZE=1514 # in bytes
 BQL=${PACKET_SIZE} # in bytes
-ETARGET_MARGIN=150 # in %
-ITARGET_MARGIN=150 # in %
+MIN_TARGET=5000 # in us
+EQUANTUM=300 # in bytes
+IQUANTUM=${PACKET_SIZE} # in bytes
 
 ELIMIT=$(( ${QUEUE_LENGTH} * ${UPLINK} / ( ${PACKET_SIZE} * 8 ) )) # packet count
 ILIMIT=$(( ${QUEUE_LENGTH} * ${DOWNLINK} / ( ${PACKET_SIZE} * 8 ) )) # packet count
@@ -39,15 +37,10 @@ flush_qdisc() {
     $IP link delete ${DEV} type ifb 2> /dev/null
 }
 
-get_etarget() {
+get_target() {
     # target computation based on packet size (mtu).
-    TARGET=$(( ${PACKET_SIZE} * 8 * ${ETARGET_MARGIN} * 1000 / ( 100 * ${1} ) ))
-    echo target ${TARGET}us
-}
-
-get_itarget() {
-    # target computation based on packet size (mtu).
-    TARGET=$(( ${PACKET_SIZE} * 8 * ${ITARGET_MARGIN} * 1000 / ( 100 * ${1} ) ))
+    TARGET=$(( ${PACKET_SIZE} * 8 * 1000 / ( 100 * ${1} ) ))
+    [ ${TARGET} -lt ${MIN_TARGET} ] && TARGET=${MIN_TARGET}
     echo target ${TARGET}us
 }
 
@@ -74,8 +67,8 @@ egress_qdisc() {
         burst ${EBURST}B latency ${QUEUE_LENGTH}ms
 
     $TC qdisc add dev ${WAN} parent 1: handle 11: ${QDISC} \
-        `get_etarget ${UPLINK}` limit ${ELIMIT} ${EECN} flows ${EFLOWS} \
-        quantum ${EQUANTUM} interval ${EINTERVAL}ms
+        `get_target ${UPLINK}` limit ${ELIMIT} ${EECN} flows ${EFLOWS} \
+        quantum ${EQUANTUM} interval ${INTERVAL}ms
 }
 
 ingress_qdisc() {
@@ -89,8 +82,8 @@ ingress_qdisc() {
         burst ${IBURST}B latency ${QUEUE_LENGTH}ms
 
     $TC qdisc add dev ${DEV} parent 1: handle 11: ${QDISC} \
-        `get_itarget ${DOWNLINK}` limit ${ILIMIT} ${IECN} flows ${IFLOWS} \
-        quantum ${IQUANTUM} interval ${IINTERVAL}ms
+        `get_target ${DOWNLINK}` limit ${ILIMIT} ${IECN} flows ${IFLOWS} \
+        quantum ${IQUANTUM} interval ${INTERVAL}ms
 
     $IP link set dev ${DEV} up
 
