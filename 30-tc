@@ -39,7 +39,7 @@ flush_qdisc() {
 
 get_target() {
     # target computation based on packet size (mtu).
-    TARGET=$(( ${PACKET_SIZE} * 8 * 1000 / ( 100 * ${1} ) ))
+    TARGET=$(( ${PACKET_SIZE} * 8 * 1000 / ( ${1} ) ))
     [ ${TARGET} -lt ${MIN_TARGET} ] && TARGET=${MIN_TARGET}
     echo target ${TARGET}us
 }
