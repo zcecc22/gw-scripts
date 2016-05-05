@@ -3,31 +3,23 @@
 WAN=eth1
 LAN=eth0
 DEV=ifb0
-DOWNLINK=100000 # in kbps
-UPLINK=6000 # in kbps
+DOWNLINK=200000 # in kbps
+UPLINK=12000 # in kbps
 QDISC=fq_codel
 TC=tc
 IP=ip
-QUEUE_LENGTH=1000 # in ms
+QUEUE_LENGTH=200 # in ms
 EFLOWS=1024 # flow count as power of 2
 IFLOWS=1024 # flow count as power of 2
 EECN=ecn
 IECN=ecn
 INTERVAL=50 # in ms
-HZ=250 # in hz
+HZ=1000 # in hz
 PACKET_SIZE=1514 # in bytes
-BQL=${PACKET_SIZE} # in bytes
+BQL=$(( 4 * ${PACKET_SIZE} )) # in bytes
 MIN_TARGET=5000 # in us
-EQUANTUM=300 # in bytes
+EQUANTUM=500 # in bytes
 IQUANTUM=${PACKET_SIZE} # in bytes
-
-ELIMIT=$(( ${QUEUE_LENGTH} * ${UPLINK} / ( ${PACKET_SIZE} * 8 ) )) # packet count
-ILIMIT=$(( ${QUEUE_LENGTH} * ${DOWNLINK} / ( ${PACKET_SIZE} * 8 ) )) # packet count
-
-EBURST=$(( ( ${UPLINK} * 1000 / ( ${HZ} * 8 ) ) + 1 )) # in bytes
-[ ${EBURST} -lt $(( ${PACKET_SIZE} + 1 )) ] && EBURST=$(( ${PACKET_SIZE} + 1 ))
-IBURST=$(( ( ${DOWNLINK} * 1000 / ( ${HZ} * 8 ) ) + 1 )) # in bytes
-[ ${IBURST} -lt $(( ${PACKET_SIZE} + 1 )) ] && IBURST=$(( ${PACKET_SIZE} + 1 ))
 
 flush_qdisc() {
     $TC qdisc del dev ${WAN} root 2> /dev/null
@@ -42,6 +34,17 @@ get_target() {
     TARGET=$(( ${PACKET_SIZE} * 8 * 1000 / ${1} ))
     [ ${TARGET} -lt ${MIN_TARGET} ] && TARGET=${MIN_TARGET}
     echo target ${TARGET}us
+}
+
+get_burst() {
+    BURST=$(( ( ${1} * 1000 / ( ${HZ} * 8 ) ) + 1 ))
+    [ ${BURST} -lt $(( ${PACKET_SIZE} + 1 )) ] && BURST=$(( ${PACKET_SIZE} + 1 ))
+    echo ${BURST}B
+}
+
+get_limit() {
+    LIMIT=$(( ${QUEUE_LENGTH} * ${1} / ( ${PACKET_SIZE} * 8 ) ))
+    echo ${LIMIT}
 }
 
 eth_setup() {
@@ -64,10 +67,10 @@ eth_setup() {
 egress_qdisc() {
     $TC qdisc del dev ${WAN} root 2> /dev/null
     $TC qdisc add dev ${WAN} root handle 1: tbf rate ${UPLINK}kbit \
-        burst ${EBURST}B latency ${QUEUE_LENGTH}ms
+        burst `get_burst ${UPLINK}` latency ${QUEUE_LENGTH}ms
 
     $TC qdisc add dev ${WAN} parent 1: handle 11: ${QDISC} \
-        `get_target ${UPLINK}` limit ${ELIMIT} ${EECN} flows ${EFLOWS} \
+        `get_target ${UPLINK}` limit `get_limit ${UPLINK}` ${EECN} flows ${EFLOWS} \
         quantum ${EQUANTUM} interval ${INTERVAL}ms
 }
 
@@ -79,10 +82,10 @@ ingress_qdisc() {
 
     $TC qdisc del dev ${DEV} root 2> /dev/null
     $TC qdisc add dev ${DEV} root handle 1: tbf rate ${DOWNLINK}kbit \
-        burst ${IBURST}B latency ${QUEUE_LENGTH}ms
+        burst `get_burst ${DOWNLINK}` latency ${QUEUE_LENGTH}ms
 
     $TC qdisc add dev ${DEV} parent 1: handle 11: ${QDISC} \
-        `get_target ${DOWNLINK}` limit ${ILIMIT} ${IECN} flows ${IFLOWS} \
+        `get_target ${DOWNLINK}` limit `get_limit ${DOWNLINK}` ${IECN} flows ${IFLOWS} \
         quantum ${IQUANTUM} interval ${INTERVAL}ms
 
     $IP link set dev ${DEV} up
