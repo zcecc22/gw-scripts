@@ -1,8 +1,27 @@
 #!/bin/sh
 
-WAN_IF=eth0
-FROM_WAN="-i ${WAN_IF}"
+LAN_IF=eth0
+WAN_IF=eth1
+BRIDGE_IF=br0
+
+FROM_BRIDGE="-i ${BRIDGE_IF}"
+TO_BRIDGE="-o ${BRIDGE_IF}"
+
+FROM_WAN_TO_LAN="${FROM_BRIDGE} ${TO_BRIDGE} -m physdev --physdev-in ${WAN_IF} --physdev-out ${LAN_IF}"
+FROM_LAN_TO_WAN="${FROM_BRIDGE} ${TO_BRIDGE} -m physdev --physdev-in ${LAN_IF} --physdev-out ${WAN_IF}"
+
+FROM_LAN="${FROM_BRIDGE} -m physdev --physdev-in ${LAN_IF}"
+FROM_WAN="${FROM_BRIDGE} -m physdev --physdev-in ${WAN_IF}"
+
+FROM_LAN_EB="--logical-in ${BRIDGE_IF} -i ${LAN_IF}"
+FROM_WAN_EB="--logical-in ${BRIDGE_IF} -i ${WAN_IF}"
+
 FROM_LO="-i lo"
+TO_LO="-o lo"
+
+ebt() {
+    ebtables $* 2>&1
+}
 
 ipt() {
     iptables $* 2>&1
@@ -24,12 +43,31 @@ flush_firewall() {
     ipt -t filter -X
     ipt -t mangle -F
     ipt -t mangle -X
+    ipt -t nat -F
+    ipt -t nat -X
+    ebt -t broute -F
+    ebt -t broute -X
 }
 
 policies() {
     ipt -t filter -P INPUT DROP
     ipt -t filter -P OUTPUT ACCEPT
     ipt -t filter -P FORWARD DROP
+}
+
+service_intercept() {
+    ebt -t broute -A BROUTING "$FROM_LAN_EB" -p IPv4 --ip-protocol tcp --ip-destination-port "$1" \
+	-j redirect --redirect-target ACCEPT
+    ebt -t broute -A BROUTING "$FROM_LAN_EB" -p IPv4 --ip-protocol udp --ip-destination-port "$1" \
+	-j redirect --redirect-target ACCEPT
+
+    ebt -t broute -A BROUTING "$FROM_LAN_EB" -p IPv6 --ip6-protocol tcp --ip6-destination-port "$1" \
+	-j redirect --redirect-target ACCEPT
+    ebt -t broute -A BROUTING "$FROM_LAN_EB" -p IPv6 --ip6-protocol udp --ip6-destination-port "$1" \
+	-j redirect --redirect-target ACCEPT
+
+    ipt -t nat -A PREROUTING "$FROM_LAN" -p tcp --dport "$1" -j REDIRECT
+    ipt -t nat -A PREROUTING "$FROM_LAN" -p udp --dport "$1" -j REDIRECT
 }
 
 allow_icmp_in() {
@@ -52,6 +90,13 @@ allow_icmp_in() {
 allow_dhcp_in() {
     allow4 "$1" "$2" "-p udp -m udp --dport 68"
     allow6 "$1" "$2" "-s fc00::/6 -d fc00::/6 -p udp -m udp --dport 546"
+}
+
+allow_broadcast_multicast_in() {
+    allow "$1" "$2" "-m addrtype --dst-type MULTICAST"
+    allow "$1" "$2" "-m addrtype --dst-type ANYCAST"
+    allow4 "$1" "$2" "-m addrtype --dst-type BROADCAST"
+    allow4 "$1" "$2" "-p igmp"
 }
 
 drop_invalid_tcp_flags_from() {
@@ -119,10 +164,25 @@ firewall() {
     drop_invalid_tcp_flags_from INPUT
     drop_icmp_frags_from INPUT
     allow_conntrack_in INPUT
+    allow_broadcast_multicast_in INPUT "$FROM_WAN"
     allow_dhcp_in INPUT "$FROM_WAN"
     allow_icmp_in INPUT "$FROM_WAN"
     allow INPUT "$FROM_WAN" "-p tcp -m tcp --dport 22"
-    allow INPUT "$FROM_WAN" "-p tcp -m tcp --dport 443"
+    allow INPUT "$FROM_LAN"
+
+    drop_invalid_tcp_flags_from FORWARD
+    drop_icmp_frags_from FORWARD
+    allow_conntrack_in FORWARD
+    allow_broadcast_multicast_in FORWARD "$FROM_WAN_TO_LAN"
+    allow_dhcp_in FORWARD "$FROM_WAN_TO_LAN"
+    allow_icmp_in FORWARD "$FROM_WAN_TO_LAN"
+    allow FORWARD "$FROM_LAN_TO_WAN"
+
+    allow OUTPUT "$TO_LO"
+    allow_conntrack_in OUTPUT
+    reject OUTPUT "$TO_BRIDGE" "-m owner --uid-owner zcecc22"
+
+    service_intercept 53
 }
 
 flush_firewall
