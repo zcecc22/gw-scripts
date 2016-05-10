@@ -55,18 +55,23 @@ policies() {
     ipt -t filter -P FORWARD DROP
 }
 
-service_intercept() {
-    ebt -t broute -A BROUTING "$FROM_LAN_EB" -p IPv4 --ip-protocol tcp --ip-destination-port "$1" \
-	-j redirect --redirect-target ACCEPT
-    ebt -t broute -A BROUTING "$FROM_LAN_EB" -p IPv4 --ip-protocol udp --ip-destination-port "$1" \
-	-j redirect --redirect-target ACCEPT
+service_intercept_tcp() {
+    ebt -t broute -A BROUTING "$FROM_LAN_EB" -p IPv4 --ip-protocol tcp \
+        --ip-destination-port "$1" -j redirect --redirect-target ACCEPT
 
-    ebt -t broute -A BROUTING "$FROM_LAN_EB" -p IPv6 --ip6-protocol tcp --ip6-destination-port "$1" \
-	-j redirect --redirect-target ACCEPT
-    ebt -t broute -A BROUTING "$FROM_LAN_EB" -p IPv6 --ip6-protocol udp --ip6-destination-port "$1" \
-	-j redirect --redirect-target ACCEPT
+    ebt -t broute -A BROUTING "$FROM_LAN_EB" -p IPv6 --ip6-protocol tcp \
+        --ip6-destination-port "$1" -j redirect --redirect-target ACCEPT
 
     ipt -t nat -A PREROUTING "$FROM_LAN" -p tcp --dport "$1" -j REDIRECT
+}
+
+service_intercept_udp() {
+    ebt -t broute -A BROUTING "$FROM_LAN_EB" -p IPv4 --ip-protocol udp \
+        --ip-destination-port "$1" -j redirect --redirect-target ACCEPT
+
+    ebt -t broute -A BROUTING "$FROM_LAN_EB" -p IPv6 --ip6-protocol udp \
+        --ip6-destination-port "$1" -j redirect --redirect-target ACCEPT
+
     ipt -t nat -A PREROUTING "$FROM_LAN" -p udp --dport "$1" -j REDIRECT
 }
 
@@ -182,7 +187,9 @@ firewall() {
     allow_conntrack_in OUTPUT
     reject OUTPUT "$TO_BRIDGE" "-m owner --uid-owner zcecc22"
 
-    service_intercept 53
+    service_intercept_udp 53
+    service_intercept_tcp 53
+    service_intercept_udp 123
 }
 
 flush_firewall
