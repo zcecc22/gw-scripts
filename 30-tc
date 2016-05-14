@@ -14,7 +14,7 @@ IFLOWS=1024 # flow count as power of 2
 EECN=ecn
 IECN=ecn
 INTERVAL=50 # in ms
-HZ=1000 # in hz
+RESOLUTION=1 # in ms
 PACKET_SIZE=1514 # in bytes
 BQL=$(( 4 * ${PACKET_SIZE} )) # in bytes
 MIN_TARGET=5000 # in us
@@ -33,13 +33,13 @@ get_target() {
     # target computation based on packet size (mtu).
     TARGET=$(( ${PACKET_SIZE} * 8 * 1000 / ${1} ))
     [ ${TARGET} -lt ${MIN_TARGET} ] && TARGET=${MIN_TARGET}
-    echo target ${TARGET}us
+    echo ${TARGET}us
 }
 
-get_burst() {
-    BURST=$(( ( ${1} * 1000 / ( ${HZ} * 8 ) ) + 1 ))
-    [ ${BURST} -lt $(( ${PACKET_SIZE} + 1 )) ] && BURST=$(( ${PACKET_SIZE} + 1 ))
-    echo ${BURST}B
+get_buffer() {
+    BUFFER=$(( ( ${RESOLUTION} * ${1} * 1000 / ( 1000 * 8 ) ) + 1 ))
+    [ ${BUFFER} -lt $(( ${PACKET_SIZE} + 1 )) ] && BUFFER=$(( ${PACKET_SIZE} + 1 ))
+    echo ${BUFFER}B
 }
 
 get_limit() {
@@ -67,10 +67,10 @@ eth_setup() {
 egress_qdisc() {
     $TC qdisc del dev ${WAN} root 2> /dev/null
     $TC qdisc add dev ${WAN} root handle 1: tbf rate ${UPLINK}kbit \
-        burst `get_burst ${UPLINK}` latency ${QUEUE_LENGTH}ms
+        buffer `get_buffer ${UPLINK}` latency ${QUEUE_LENGTH}ms
 
     $TC qdisc add dev ${WAN} parent 1: handle 11: ${QDISC} \
-        `get_target ${UPLINK}` limit `get_limit ${UPLINK}` ${EECN} flows ${EFLOWS} \
+        target `get_target ${UPLINK}` limit `get_limit ${UPLINK}` ${EECN} flows ${EFLOWS} \
         quantum ${EQUANTUM} interval ${INTERVAL}ms
 }
 
@@ -82,10 +82,10 @@ ingress_qdisc() {
 
     $TC qdisc del dev ${DEV} root 2> /dev/null
     $TC qdisc add dev ${DEV} root handle 1: tbf rate ${DOWNLINK}kbit \
-        burst `get_burst ${DOWNLINK}` latency ${QUEUE_LENGTH}ms
+        buffer `get_buffer ${DOWNLINK}` latency ${QUEUE_LENGTH}ms
 
     $TC qdisc add dev ${DEV} parent 1: handle 11: ${QDISC} \
-        `get_target ${DOWNLINK}` limit `get_limit ${DOWNLINK}` ${IECN} flows ${IFLOWS} \
+        target `get_target ${DOWNLINK}` limit `get_limit ${DOWNLINK}` ${IECN} flows ${IFLOWS} \
         quantum ${IQUANTUM} interval ${INTERVAL}ms
 
     $IP link set dev ${DEV} up
