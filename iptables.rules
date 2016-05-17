@@ -6,15 +6,17 @@ BRIDGE_IF=br0
 
 FROM_BRIDGE="-i ${BRIDGE_IF}"
 TO_BRIDGE="-o ${BRIDGE_IF}"
-
-FROM_WAN_TO_LAN="${FROM_BRIDGE} ${TO_BRIDGE} -m physdev --physdev-in ${WAN_IF} --physdev-out ${LAN_IF}"
-FROM_LAN_TO_WAN="${FROM_BRIDGE} ${TO_BRIDGE} -m physdev --physdev-in ${LAN_IF} --physdev-out ${WAN_IF}"
+FROM_LO="-i lo"
+TO_LO="-o lo"
 
 FROM_LAN="${FROM_BRIDGE} -m physdev --physdev-in ${LAN_IF}"
 FROM_WAN="${FROM_BRIDGE} -m physdev --physdev-in ${WAN_IF}"
 
-FROM_LO="-i lo"
-TO_LO="-o lo"
+TO_LAN="${TO_BRIDGE} -m physdev --physdev-out ${LAN_IF}"
+TO_WAN="${TO_BRIDGE} -m physdev --physdev-out ${WAN_IF}"
+
+FROM_WAN_TO_LAN="${FROM_WAN} ${TO_LAN}"
+FROM_LAN_TO_WAN="${FROM_LAN} ${TO_WAN}"
 
 ipt() {
     iptables $* 2>&1
@@ -46,12 +48,22 @@ policies() {
     ipt -t filter -P FORWARD DROP
 }
 
+service_dscp_tcp() {
+    ipt -t mangle -A POSTROUTING ${1:+"$1"} -p tcp --dport ${2:+"$2"} \
+    ${4:+"$4"} -j DSCP --set-dscp-class ${3:+"$3"}
+}
+
+service_dscp_udp() {
+    ipt -t mangle -A POSTROUTING ${1:+"$1"} -p udp --dport ${2:+"$2"} \
+    ${4:+"$4"} -j DSCP --set-dscp-class ${3:+"$3"}
+}
+
 service_intercept_tcp() {
-    ipt -t nat -A PREROUTING "$FROM_LAN" -p tcp --dport "$1" -j REDIRECT
+    ipt -t nat -A PREROUTING "$FROM_LAN" -p tcp --dport ${1:+"$1"} -j REDIRECT
 }
 
 service_intercept_udp() {
-    ipt -t nat -A PREROUTING "$FROM_LAN" -p udp --dport "$1" -j REDIRECT
+    ipt -t nat -A PREROUTING "$FROM_LAN" -p udp --dport ${1:+"$1"} -j REDIRECT
 }
 
 allow_icmp_in() {
@@ -101,7 +113,7 @@ allow_conntrack_in() {
 }
 
 log_all_in() {
-    ipt -t filter -A "$1" -j LOG --log-prefix "$1: "
+    ipt -t filter -A ${1:+"$1"} -j LOG --log-prefix "${1:+"$1":}"
 }
 
 allow() {
@@ -169,6 +181,10 @@ firewall() {
     service_intercept_udp 53
     service_intercept_tcp 53
     service_intercept_udp 123
+    
+    service_dscp_tcp "$TO_WAN" 53 AF41
+    service_dscp_udp "$TO_WAN" 53 AF41
+    service_dscp_udp "$TO_WAN" 123 CS2
 }
 
 flush_firewall
