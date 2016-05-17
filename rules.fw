@@ -13,15 +13,8 @@ FROM_LAN_TO_WAN="${FROM_BRIDGE} ${TO_BRIDGE} -m physdev --physdev-in ${LAN_IF} -
 FROM_LAN="${FROM_BRIDGE} -m physdev --physdev-in ${LAN_IF}"
 FROM_WAN="${FROM_BRIDGE} -m physdev --physdev-in ${WAN_IF}"
 
-FROM_LAN_EB="--logical-in ${BRIDGE_IF} -i ${LAN_IF}"
-FROM_WAN_EB="--logical-in ${BRIDGE_IF} -i ${WAN_IF}"
-
 FROM_LO="-i lo"
 TO_LO="-o lo"
-
-ebt() {
-    ebtables $* 2>&1
-}
 
 ipt() {
     iptables $* 2>&1
@@ -45,8 +38,6 @@ flush_firewall() {
     ipt -t mangle -X
     ipt -t nat -F
     ipt -t nat -X
-    ebt -t broute -F
-    ebt -t broute -X
 }
 
 policies() {
@@ -56,22 +47,10 @@ policies() {
 }
 
 service_intercept_tcp() {
-    ebt -t broute -A BROUTING "$FROM_LAN_EB" -p IPv4 --ip-protocol tcp \
-        --ip-destination-port "$1" -j redirect --redirect-target ACCEPT
-
-    ebt -t broute -A BROUTING "$FROM_LAN_EB" -p IPv6 --ip6-protocol tcp \
-        --ip6-destination-port "$1" -j redirect --redirect-target ACCEPT
-
     ipt -t nat -A PREROUTING "$FROM_LAN" -p tcp --dport "$1" -j REDIRECT
 }
 
 service_intercept_udp() {
-    ebt -t broute -A BROUTING "$FROM_LAN_EB" -p IPv4 --ip-protocol udp \
-        --ip-destination-port "$1" -j redirect --redirect-target ACCEPT
-
-    ebt -t broute -A BROUTING "$FROM_LAN_EB" -p IPv6 --ip6-protocol udp \
-        --ip6-destination-port "$1" -j redirect --redirect-target ACCEPT
-
     ipt -t nat -A PREROUTING "$FROM_LAN" -p udp --dport "$1" -j REDIRECT
 }
 
