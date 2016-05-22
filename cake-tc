@@ -1,0 +1,92 @@
+#!/bin/sh
+
+WAN=eth1
+LAN=eth0
+DEV=ifb0
+DOWNLINK=200000 # in kbps
+UPLINK=12000 # in kbps
+TC=tc-adv
+IP=ip
+PACKET_SIZE=1514 # in bytes
+BQL=$(( 2 * ${PACKET_SIZE} )) # in bytes
+ECAKE_OPTS="besteffort"
+ICAKE_OPTS="besteffort"
+
+flush_qdisc() {
+    $TC qdisc del dev ${WAN} root 2> /dev/null
+    $TC qdisc del dev ${WAN} handle ffff: ingress 2> /dev/null
+    $TC qdisc del dev ${DEV} root 2> /dev/null
+    $IP link set dev ${DEV} down 2> /dev/null
+    $IP link delete ${DEV} type ifb 2> /dev/null
+    rmmod sch_cake
+}
+
+eth_setup() {
+    # turn offloads off.
+    ethtool -K ${1} gso off 2> /dev/null
+    ethtool -K ${1} tso off 2> /dev/null
+    ethtool -K ${1} ufo off 2> /dev/null
+    ethtool -K ${1} gro off 2> /dev/null
+
+    # setup BQL.
+    if [ -e /sys/class/net/${1}/queues/tx-0/byte_queue_limits ]
+    then
+        for i in /sys/class/net/${1}/queues/tx-*/byte_queue_limits
+        do
+            echo ${BQL} > $i/limit_max
+        done
+    fi
+}
+
+egress_qdisc() {
+    $TC qdisc del dev ${WAN} root 2> /dev/null
+    $TC qdisc add dev ${WAN} root cake bandwidth ${UPLINK}kbit ${ECAKE_OPTS}
+}
+
+ingress_qdisc() {
+    $TC qdisc del dev ${WAN} handle ffff: ingress 2> /dev/null
+    $TC qdisc add dev ${WAN} handle ffff: ingress
+
+    $IP link add name ${DEV} type ifb
+
+    $TC qdisc del dev ${DEV} root 2> /dev/null
+    $TC qdisc add dev ${DEV} root cake bandwidth ${DOWNLINK}kbit ${ICAKE_OPTS}
+
+    $IP link set dev ${DEV} up
+
+    $TC filter add dev ${WAN} parent ffff: protocol all prio 1 u32 \
+    match u32 0 0 action mirred egress redirect dev ${DEV}
+}
+
+tc_start() {
+    flush_qdisc
+    eth_setup ${WAN}
+    eth_setup ${LAN}
+    egress_qdisc
+    ingress_qdisc
+}
+
+tc_stop() {
+    flush_qdisc
+}
+
+case "$1" in
+start|restart|reload|force-reload)
+    tc_start
+    ;;
+save)
+    echo "tc save not applicable."
+    ;;
+stop)
+    echo "Automatic flushing disabled, use \"flush\" instead of \"stop\""
+    ;;
+flush)
+    tc_stop
+    ;;
+*)
+    echo "Usage: $0 {start|restart|reload|force-reload|save|flush}" >&2
+    exit 1
+    ;;
+esac
+
+exit 0

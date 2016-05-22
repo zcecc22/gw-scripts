@@ -180,11 +180,6 @@ firewall() {
 
     service_intercept_udp 53
     service_intercept_tcp 53
-    service_intercept_udp 123
-    
-    service_dscp_tcp "$TO_WAN" 53 AF41
-    service_dscp_udp "$TO_WAN" 53 AF41
-    service_dscp_udp "$TO_WAN" 123 CS2
 }
 
 flush_firewall

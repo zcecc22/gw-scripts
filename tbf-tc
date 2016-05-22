@@ -16,7 +16,7 @@ IECN=ecn
 INTERVAL=50 # in ms
 RESOLUTION=1 # in ms
 PACKET_SIZE=1514 # in bytes
-BQL=$(( 4 * ${PACKET_SIZE} )) # in bytes
+BQL=$(( 2 * ${PACKET_SIZE} )) # in bytes
 MIN_TARGET=5000 # in us
 EQUANTUM=500 # in bytes
 IQUANTUM=${PACKET_SIZE} # in bytes
@@ -27,6 +27,7 @@ flush_qdisc() {
     $TC qdisc del dev ${DEV} root 2> /dev/null
     $IP link set dev ${DEV} down 2> /dev/null
     $IP link delete ${DEV} type ifb 2> /dev/null
+    rmmod sch_tbf
 }
 
 get_target() {
@@ -57,10 +58,10 @@ eth_setup() {
     # setup BQL.
     if [ -e /sys/class/net/${1}/queues/tx-0/byte_queue_limits ]
     then
-       for i in /sys/class/net/${1}/queues/tx-*/byte_queue_limits
-       do
-          echo ${BQL} > $i/limit_max
-       done
+        for i in /sys/class/net/${1}/queues/tx-*/byte_queue_limits
+        do
+            echo ${BQL} > $i/limit_max
+        done
     fi
 }
 
