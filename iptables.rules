@@ -43,9 +43,9 @@ flush_firewall() {
 }
 
 policies() {
-    ipt -t filter -P INPUT DROP
+    ipt -t filter -P INPUT ACCEPT
     ipt -t filter -P OUTPUT ACCEPT
-    ipt -t filter -P FORWARD DROP
+    ipt -t filter -P FORWARD ACCEPT
 }
 
 service_dscp_tcp() {
@@ -70,17 +70,13 @@ allow_icmp_in() {
     allow4 "$1" "$2" "-p icmp -m icmp --icmp-type 8"
     allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 128"
     allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 130"
-    allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 131"
-    allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 132"
     allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 134"
     allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 135"
     allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 136"
     allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 139"
     allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 141"
     allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 142"
-    allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 143"
     allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 144"
-    allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 145"
 }
 
 allow_dhcp_in() {
@@ -93,14 +89,6 @@ allow_broadcast_multicast_in() {
     allow "$1" "$2" "-m addrtype --dst-type ANYCAST"
     allow4 "$1" "$2" "-m addrtype --dst-type BROADCAST"
     allow4 "$1" "$2" "-p igmp"
-}
-
-drop_invalid_tcp_flags_from() {
-    drop "$1" "-p tcp -m tcp --tcp-flags ALL ALL"
-    drop "$1" "-p tcp -m tcp --tcp-flags SYN,FIN SYN,FIN"
-    drop "$1" "-p tcp -m tcp --tcp-flags SYN,RST SYN,RST"
-    drop "$1" "-p tcp -m tcp --tcp-flags ALL FIN,URG,PSH"
-    drop "$1" "-p tcp -m tcp --tcp-flags ALL NONE"
 }
 
 drop_icmp_frags_from() {
@@ -157,24 +145,24 @@ firewall() {
     ipt -t raw -A PREROUTING -i lo -j NOTRACK
 
     allow INPUT "$FROM_LO"
-    drop_invalid_tcp_flags_from INPUT
     drop_icmp_frags_from INPUT
     allow_conntrack_in INPUT
     allow_broadcast_multicast_in INPUT "$FROM_WAN"
     allow_dhcp_in INPUT "$FROM_WAN"
     allow_icmp_in INPUT "$FROM_WAN"
-    allow INPUT "$FROM_WAN" "-p tcp -m tcp --dport 22"
-    allow INPUT "$FROM_WAN" "-p tcp -m tcp --dport 80"
-    allow INPUT "$FROM_WAN" "-p tcp -m tcp --dport 443"
+    allow INPUT "$FROM_WAN" "-p tcp -m multiport --dports 22,80,443"
     allow INPUT "$FROM_LAN"
+    log_all_in INPUT
+    drop INPUT
 
-    drop_invalid_tcp_flags_from FORWARD
     drop_icmp_frags_from FORWARD
     allow_conntrack_in FORWARD
     allow_broadcast_multicast_in FORWARD "$FROM_WAN_TO_LAN"
     allow_dhcp_in FORWARD "$FROM_WAN_TO_LAN"
     allow_icmp_in FORWARD "$FROM_WAN_TO_LAN"
     allow FORWARD "$FROM_LAN_TO_WAN"
+    log_all_in FORWARD
+    drop FORWARD
 
     allow OUTPUT "$TO_LO"
     allow_conntrack_in OUTPUT
