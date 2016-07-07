@@ -48,22 +48,13 @@ policies() {
     ipt -t filter -P FORWARD ACCEPT
 }
 
-service_dscp_tcp() {
-    ipt -t mangle -A POSTROUTING ${1:+"$1"} -p tcp --dport ${2:+"$2"} \
-    ${4:+"$4"} -j DSCP --set-dscp-class ${3:+"$3"}
+dscp() {
+    ipt -t mangle -A POSTROUTING ${1:+"$1"} ${2:+"$2"} \
+    -j DSCP --set-dscp-class ${3:+"$3"}
 }
 
-service_dscp_udp() {
-    ipt -t mangle -A POSTROUTING ${1:+"$1"} -p udp --dport ${2:+"$2"} \
-    ${4:+"$4"} -j DSCP --set-dscp-class ${3:+"$3"}
-}
-
-service_intercept_tcp() {
-    ipt -t nat -A PREROUTING "$FROM_LAN" -p tcp --dport ${1:+"$1"} -j REDIRECT
-}
-
-service_intercept_udp() {
-    ipt -t nat -A PREROUTING "$FROM_LAN" -p udp --dport ${1:+"$1"} -j REDIRECT
+intercept() {
+    ipt -t nat -A PREROUTING ${1:+"$1"} ${2:+"$2"} -j REDIRECT
 }
 
 allow_icmp_in() {
@@ -82,13 +73,6 @@ allow_icmp_in() {
 allow_dhcp_in() {
     allow4 "$1" "$2" "-p udp -m udp --dport 68"
     allow6 "$1" "$2" "-s fc00::/6 -d fc00::/6 -p udp -m udp --dport 546"
-}
-
-allow_broadcast_multicast_in() {
-    allow "$1" "$2" "-m addrtype --dst-type MULTICAST"
-    allow "$1" "$2" "-m addrtype --dst-type ANYCAST"
-    allow4 "$1" "$2" "-m addrtype --dst-type BROADCAST"
-    allow4 "$1" "$2" "-p igmp"
 }
 
 drop_icmp_frags_from() {
@@ -147,7 +131,6 @@ firewall() {
     allow INPUT "$FROM_LO"
     drop_icmp_frags_from INPUT
     allow_conntrack_in INPUT
-    allow_broadcast_multicast_in INPUT "$FROM_WAN"
     allow_dhcp_in INPUT "$FROM_WAN"
     allow_icmp_in INPUT "$FROM_WAN"
     allow INPUT "$FROM_WAN" "-p tcp -m multiport --dports 22,80,443"
@@ -156,7 +139,6 @@ firewall() {
 
     drop_icmp_frags_from FORWARD
     allow_conntrack_in FORWARD
-    allow_broadcast_multicast_in FORWARD "$FROM_WAN_TO_LAN"
     allow_dhcp_in FORWARD "$FROM_WAN_TO_LAN"
     allow_icmp_in FORWARD "$FROM_WAN_TO_LAN"
     allow FORWARD "$FROM_LAN_TO_WAN"
@@ -166,8 +148,8 @@ firewall() {
     allow_conntrack_in OUTPUT
     reject OUTPUT "$TO_BRIDGE" "-m owner --uid-owner zcecc22"
 
-    service_intercept_udp 53
-    service_intercept_tcp 53
+    intercept "$FROM_LAN" "-p tcp --dport 53"
+    intercept "$FROM_LAN" "-p udp --dport 53"
 }
 
 flush_firewall
