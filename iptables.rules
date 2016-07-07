@@ -152,7 +152,6 @@ firewall() {
     allow_icmp_in INPUT "$FROM_WAN"
     allow INPUT "$FROM_WAN" "-p tcp -m multiport --dports 22,80,443"
     allow INPUT "$FROM_LAN"
-    log_all_in INPUT
     drop INPUT
 
     drop_icmp_frags_from FORWARD
@@ -161,7 +160,6 @@ firewall() {
     allow_dhcp_in FORWARD "$FROM_WAN_TO_LAN"
     allow_icmp_in FORWARD "$FROM_WAN_TO_LAN"
     allow FORWARD "$FROM_LAN_TO_WAN"
-    log_all_in FORWARD
     drop FORWARD
 
     allow OUTPUT "$TO_LO"
