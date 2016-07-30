@@ -147,9 +147,6 @@ firewall() {
     allow OUTPUT "$TO_LO"
     allow_conntrack_in OUTPUT
     reject OUTPUT "$TO_BRIDGE" "-m owner --uid-owner zcecc22"
-
-    intercept "$FROM_LAN" "-p tcp --dport 53"
-    intercept "$FROM_LAN" "-p udp --dport 53"
 }
 
 flush_firewall
