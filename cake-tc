@@ -9,7 +9,7 @@ TC=tc-adv
 IP=ip
 PACKET_SIZE=1514 # in bytes
 BQL=$(( 2 * ${PACKET_SIZE} )) # in bytes
-ECAKE_OPTS="rtt 50ms besteffort"
+ECAKE_OPTS="rtt 50ms diffserv-llt"
 ICAKE_OPTS="rtt 50ms besteffort"
 
 flush_qdisc() {
