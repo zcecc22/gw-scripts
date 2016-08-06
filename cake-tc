@@ -1,7 +1,7 @@
 #!/bin/sh
 
-WAN=eth1
-LAN=eth0
+LAN=enp3s0
+WAN=enp4s0
 DEV=ifb0
 DOWNLINK=200000 # in kbps
 UPLINK=12000 # in kbps
