@@ -75,8 +75,8 @@ allow_dhcp_in() {
     allow6 "$1" "$2" "-s fc00::/6 -d fc00::/6 -p udp -m udp --dport 546"
 }
 
-drop_icmp_frags_from() {
-    drop4 "$1" "-p icmp -f"
+drop_fragments_from() {
+    drop4 "$1" "-f"
 }
 
 allow_conntrack_in() {
@@ -129,15 +129,15 @@ firewall() {
     ipt -t raw -A PREROUTING -i lo -j NOTRACK
 
     allow INPUT "$FROM_LO"
-    drop_icmp_frags_from INPUT
+    drop_fragments_from INPUT
     allow_conntrack_in INPUT
     allow_dhcp_in INPUT "$FROM_WAN"
     allow_icmp_in INPUT "$FROM_WAN"
-    allow INPUT "$FROM_WAN" "-p tcp -m multiport --dports 22,80,443"
+    allow INPUT "$FROM_WAN" "-p tcp -m multiport --dports ssh,http,https"
     allow INPUT "$FROM_LAN"
     drop INPUT
 
-    drop_icmp_frags_from FORWARD
+    drop_fragments_from FORWARD
     allow_conntrack_in FORWARD
     allow_dhcp_in FORWARD "$FROM_WAN_TO_LAN"
     allow_icmp_in FORWARD "$FROM_WAN_TO_LAN"
