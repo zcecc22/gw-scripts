@@ -9,8 +9,8 @@ TC=tc-adv
 IP=ip
 PACKET_SIZE=1514 # in bytes
 BQL=$(( 2 * ${PACKET_SIZE} )) # in bytes
-ECAKE_OPTS="rtt 50ms diffserv4"
-ICAKE_OPTS="rtt 50ms besteffort"
+ECAKE_OPTS="rtt 40ms diffserv-llt"
+ICAKE_OPTS="rtt 40ms besteffort"
 
 flush_qdisc() {
     $TC qdisc del dev ${WAN} root 2> /dev/null
