@@ -48,15 +48,6 @@ policies() {
     ipt -t filter -P FORWARD ACCEPT
 }
 
-dscp() {
-    ipt -t mangle -A POSTROUTING ${1:+"$1"} ${2:+"$2"} \
-    -j DSCP --set-dscp-class ${3:+"$3"}
-}
-
-intercept() {
-    ipt -t nat -A PREROUTING ${1:+"$1"} ${2:+"$2"} -j REDIRECT
-}
-
 allow_icmp_in() {
     allow4 "$1" "$2" "-p icmp -m icmp --icmp-type 8"
     allow6 "$1" "$2" "-p icmpv6 -m icmp6 --icmpv6-type 128"
@@ -133,7 +124,7 @@ firewall() {
     allow_conntrack_in INPUT
     allow_dhcp_in INPUT "$FROM_WAN"
     allow_icmp_in INPUT "$FROM_WAN"
-    allow INPUT "$FROM_WAN" "-p tcp -m multiport --dports ssh,http,https"
+    allow INPUT "$FROM_WAN" "-p tcp -m multiport --dports ssh,http"
     allow INPUT "$FROM_LAN"
     drop INPUT
 
@@ -144,8 +135,6 @@ firewall() {
     allow FORWARD "$FROM_LAN_TO_WAN"
     drop FORWARD
 
-    allow OUTPUT "$TO_LO"
-    allow_conntrack_in OUTPUT
     reject OUTPUT "$TO_BRIDGE" "-m owner --uid-owner debian-deluged"
 }
 
