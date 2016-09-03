@@ -117,11 +117,10 @@ drop6() {
 
 firewall() {
     policies
-    ipt -t raw -A PREROUTING -i lo -j NOTRACK
 
-    allow INPUT "$FROM_LO"
     drop_fragments_from INPUT
     allow_conntrack_in INPUT
+    allow INPUT "$FROM_LO"
     allow_dhcp_in INPUT "$FROM_WAN"
     allow_icmp_in INPUT "$FROM_WAN"
     allow INPUT "$FROM_WAN" "-p tcp -m multiport --dports ssh,http"
