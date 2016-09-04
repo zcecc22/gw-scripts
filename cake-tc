@@ -75,7 +75,6 @@ start|restart|reload|force-reload)
     tc_start
     ;;
 save)
-    echo "tc save not applicable."
     ;;
 stop)
     echo "Automatic flushing disabled, use \"flush\" instead of \"stop\""
