@@ -2,14 +2,12 @@
 
 IF=eno1
 DEV=eno1i
-DOWNLINK=180000 # in kbps
-UPLINK=180000 # in kbps
 TC=tc-adv
 IP=ip
 PACKET_SIZE=1514 # in bytes
 BQL=$(( 2 * ${PACKET_SIZE} )) # in bytes
-ECAKE_OPTS="lan besteffort"
-ICAKE_OPTS="lan besteffort"
+ECAKE_OPTS="lan besteffort dsthost"
+ICAKE_OPTS="lan besteffort srchost"
 
 flush_qdisc() {
     $TC qdisc del dev ${IF} root 2> /dev/null
@@ -38,7 +36,7 @@ eth_setup() {
 
 egress_qdisc() {
     $TC qdisc del dev ${IF} root 2> /dev/null
-    $TC qdisc add dev ${IF} root cake bandwidth ${UPLINK}kbit ${ECAKE_OPTS}
+    $TC qdisc add dev ${IF} root cake ${ECAKE_OPTS}
 }
 
 ingress_qdisc() {
@@ -48,7 +46,7 @@ ingress_qdisc() {
     $IP link add name ${DEV} type ifb
 
     $TC qdisc del dev ${DEV} root 2> /dev/null
-    $TC qdisc add dev ${DEV} root cake bandwidth ${DOWNLINK}kbit ${ICAKE_OPTS}
+    $TC qdisc add dev ${DEV} root cake ${ICAKE_OPTS}
 
     $IP link set dev ${DEV} up
 
