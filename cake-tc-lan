@@ -1,37 +1,35 @@
 #!/bin/sh
 
-LAN=eno1
-WAN=enp2s0
-DEV=ifb0
-DOWNLINK=200000 # in kbps
-UPLINK=12000 # in kbps
+IF=eno1
+DEV=eno1i
+DOWNLINK=180000 # in kbps
+UPLINK=180000 # in kbps
 TC=tc-adv
 IP=ip
 PACKET_SIZE=1514 # in bytes
 BQL=$(( 2 * ${PACKET_SIZE} )) # in bytes
-ECAKE_OPTS="rtt 25ms diffserv-llt"
-ICAKE_OPTS="rtt 25ms besteffort"
+ECAKE_OPTS="lan besteffort"
+ICAKE_OPTS="lan besteffort"
 
 flush_qdisc() {
-    $TC qdisc del dev ${WAN} root 2> /dev/null
-    $TC qdisc del dev ${WAN} handle ffff: ingress 2> /dev/null
+    $TC qdisc del dev ${IF} root 2> /dev/null
+    $TC qdisc del dev ${IF} handle ffff: ingress 2> /dev/null
     $TC qdisc del dev ${DEV} root 2> /dev/null
     $IP link set dev ${DEV} down 2> /dev/null
     $IP link delete ${DEV} type ifb 2> /dev/null
-    rmmod sch_cake
 }
 
 eth_setup() {
     # turn offloads off.
-    ethtool -K ${1} gso off 2> /dev/null
-    ethtool -K ${1} tso off 2> /dev/null
-    ethtool -K ${1} ufo off 2> /dev/null
-    ethtool -K ${1} gro off 2> /dev/null
+    ethtool -K ${IF} gso off 2> /dev/null
+    ethtool -K ${IF} tso off 2> /dev/null
+    ethtool -K ${IF} ufo off 2> /dev/null
+    ethtool -K ${IF} gro off 2> /dev/null
 
     # setup BQL.
-    if [ -e /sys/class/net/${1}/queues/tx-0/byte_queue_limits ]
+    if [ -e /sys/class/net/${IF}/queues/tx-0/byte_queue_limits ]
     then
-        for i in /sys/class/net/${1}/queues/tx-*/byte_queue_limits
+        for i in /sys/class/net/${IF}/queues/tx-*/byte_queue_limits
         do
             echo ${BQL} > $i/limit_max
         done
@@ -39,13 +37,13 @@ eth_setup() {
 }
 
 egress_qdisc() {
-    $TC qdisc del dev ${WAN} root 2> /dev/null
-    $TC qdisc add dev ${WAN} root cake bandwidth ${UPLINK}kbit ${ECAKE_OPTS}
+    $TC qdisc del dev ${IF} root 2> /dev/null
+    $TC qdisc add dev ${IF} root cake bandwidth ${UPLINK}kbit ${ECAKE_OPTS}
 }
 
 ingress_qdisc() {
-    $TC qdisc del dev ${WAN} handle ffff: ingress 2> /dev/null
-    $TC qdisc add dev ${WAN} handle ffff: ingress
+    $TC qdisc del dev ${IF} handle ffff: ingress 2> /dev/null
+    $TC qdisc add dev ${IF} handle ffff: ingress
 
     $IP link add name ${DEV} type ifb
 
@@ -54,14 +52,13 @@ ingress_qdisc() {
 
     $IP link set dev ${DEV} up
 
-    $TC filter add dev ${WAN} parent ffff: protocol all prio 1 u32 \
+    $TC filter add dev ${IF} parent ffff: protocol all prio 1 u32 \
     match u32 0 0 action mirred egress redirect dev ${DEV}
 }
 
 tc_start() {
     flush_qdisc
-    eth_setup ${WAN}
-    eth_setup ${LAN}
+    eth_setup
     egress_qdisc
     ingress_qdisc
 }
