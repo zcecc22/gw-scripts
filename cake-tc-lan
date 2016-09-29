@@ -18,7 +18,7 @@ flush_qdisc() {
 }
 
 eth_setup() {
-    # turn offloads off.
+    # turn offloads on.
     ethtool -K ${IF} gso on 2> /dev/null
     ethtool -K ${IF} tso on 2> /dev/null
     ethtool -K ${IF} ufo on 2> /dev/null
