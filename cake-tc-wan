@@ -21,10 +21,10 @@ flush_qdisc() {
 
 eth_setup() {
     # turn offloads off.
-    ethtool -K ${IF} gso off 2> /dev/null
-    ethtool -K ${IF} tso off 2> /dev/null
-    ethtool -K ${IF} ufo off 2> /dev/null
-    ethtool -K ${IF} gro off 2> /dev/null
+    ethtool -K ${IF} gso on 2> /dev/null
+    ethtool -K ${IF} tso on 2> /dev/null
+    ethtool -K ${IF} ufo on 2> /dev/null
+    ethtool -K ${IF} gro on 2> /dev/null
 
     # setup BQL.
     if [ -e /sys/class/net/${IF}/queues/tx-0/byte_queue_limits ]
