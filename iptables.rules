@@ -79,6 +79,10 @@ log_all_in() {
     ipt -t filter -A ${1:+"$1"} -j LOG --log-prefix "${1:+"$1":}"
 }
 
+intercept() {
+    ipt -t nat -A PREROUTING ${1:+"$1"} ${2:+"$2"} -j REDIRECT
+}
+
 allow() {
     ipt -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j ACCEPT
 }
@@ -135,6 +139,8 @@ firewall() {
     drop FORWARD
 
     reject OUTPUT "$TO_BRIDGE" "-m owner --uid-owner debian-transmission"
+
+    intercept "$FROM_LAN" "-p udp --dport 53"
 }
 
 flush_firewall
