@@ -7,7 +7,7 @@ IP=ip
 PACKET_SIZE=1514 # in bytes
 BQL=$(( 2 * ${PACKET_SIZE} )) # in bytes
 ECAKE_OPTS="lan besteffort dual-dsthost"
-ICAKE_OPTS="lan besteffort dual-srchost"
+ICAKE_OPTS="lan diffserv4 dual-srchost"
 
 flush_qdisc() {
     $TC qdisc del dev ${IF} root 2> /dev/null
