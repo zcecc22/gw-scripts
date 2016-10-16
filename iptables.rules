@@ -136,10 +136,10 @@ firewall() {
     allow_conntrack_in INPUT
     allow_dhcp_in INPUT "$FROM_WAN"
     allow_icmp_in INPUT "$FROM_WAN"
-    allow INPUT "$FROM_WAN" "-p tcp -m multiport --dports ssh,http,https"
+    allow INPUT "$FROM_WAN" "-p tcp -m multiport --dports ssh,http,http-alt,https"
     allow INPUT "$FROM_LAN"
     drop INPUT
-    
+
     # Forward Rules
     drop_fragments_from FORWARD
     allow_conntrack_in FORWARD
@@ -147,7 +147,7 @@ firewall() {
     allow_icmp_in FORWARD "$FROM_WAN_TO_LAN"
     allow FORWARD "$FROM_LAN_TO_WAN"
     drop FORWARD
-    
+
     # Output Rules
     reject OUTPUT "$TO_BRIDGE" "-m owner --uid-owner debian-transmission"
 }
