@@ -127,6 +127,14 @@ drop6() {
     ipt6 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j DROP
 }
 
+mark() {
+    ipt -t mangle -A ${1:+"$1"} ${2:+"$2"} -j MARK --set-mark ${3:+"$3"}
+}
+
+masquerade() {
+    ipt -t nat -A POSTROUTING -m mark ! --mark 0x00/0xff -j MASQUERADE
+}
+
 firewall() {
     policies
 
@@ -150,6 +158,12 @@ firewall() {
 
     # Output Rules
     reject OUTPUT "$TO_BRIDGE" "-m owner --uid-owner debian-transmission"
+
+    # Mark Rules
+    mark OUTPUT "-m owner ! --uid-owner debian-transmission" 0x01/0xff
+
+    # Masquerade
+    masquerade
 }
 
 policies
