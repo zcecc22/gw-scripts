@@ -130,23 +130,94 @@ drop6() {
     ipt6 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j DROP
 }
 
+dscp() {
+    ipt -t mangle -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -m dscp --dscp 0x00 \
+      -j DSCP --set-dscp ${4:+"$4"}
+}
+
+dscp4() {
+    ipt4 -t mangle -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -m dscp --dscp 0x00 \
+      -j DSCP --set-dscp ${4:+"$4"}
+}
+
+dscp6() {
+    ipt6 -t mangle -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -m dscp --dscp 0x00 \
+      -j DSCP --set-dscp ${4:+"$4"}
+}
+
+skip_mark() {
+    ipt -t mangle -A ${1:+"$1"} ${2:+"$2"} -j RETURN
+}
+
+skip_mark4() {
+    ipt4 -t mangle -A ${1:+"$1"} ${2:+"$2"} -j RETURN
+}
+
+skip_mark6() {
+    ipt6 -t mangle -A ${1:+"$1"} ${2:+"$2"} -j RETURN
+}
+
+skip_dscp() {
+    ipt -t mangle -A ${1:+"$1"} ${2:+"$2"} -j RETURN
+}
+
+skip_dscp4() {
+    ipt4 -t mangle -A ${1:+"$1"} ${2:+"$2"} -j RETURN
+}
+
+skip_dscp6() {
+    ipt6 -t mangle -A ${1:+"$1"} ${2:+"$2"} -j RETURN
+}
+
+mark() {
+    ipt -t mangle -A ${1:+"$1"} ${2:+"$2"} -m mark --mark 0x00/0xff \
+      -j MARK --set-mark ${3:+"$3"}
+}
+
 mark4() {
     ipt4 -t mangle -A ${1:+"$1"} ${2:+"$2"} -m mark --mark 0x00/0xff \
       -j MARK --set-mark ${3:+"$3"}
 }
 
-save4() {
+mark6() {
+    ipt6 -t mangle -A ${1:+"$1"} ${2:+"$2"} -m mark --mark 0x00/0xff \
+      -j MARK --set-mark ${3:+"$3"}
+}
+
+save_mark() {
+    ipt -t mangle -A ${1:+"$1"} -j CONNMARK --save-mark
+}
+
+save_mark4() {
     ipt4 -t mangle -A ${1:+"$1"} -j CONNMARK --save-mark
 }
 
-restore4() {
+save_mark6() {
+    ipt6 -t mangle -A ${1:+"$1"} -j CONNMARK --save-mark
+}
+
+restore_mark() {
+    ipt -t mangle -A ${1:+"$1"} -j CONNMARK --restore-mark
+}
+
+restore_mark4() {
     ipt4 -t mangle -A ${1:+"$1"} -j CONNMARK --restore-mark
-    ipt4 -t mangle -A ${1:+"$1"} -m mark ! --mark 0x00/0xff -j RETURN
+}
+
+restore_mark6() {
+    ipt6 -t mangle -A ${1:+"$1"} -j CONNMARK --restore-mark
+}
+
+masquerade() {
+    ipt -t nat -A POSTROUTING ${1:+"$1"} ${2:+"$2"} -j MASQUERADE
 }
 
 masquerade4() {
-    ipt4 -t nat -A POSTROUTING "$TO_VPN" -m mark --mark 0x02/0xff -j MASQUERADE
-    ipt4 -t nat -A POSTROUTING "$TO_BRIDGE" -m mark --mark 0x01/0xff -j MASQUERADE
+    ipt4 -t nat -A POSTROUTING ${1:+"$1"} ${2:+"$2"} -j MASQUERADE
+}
+
+masquerade6() {
+    ipt6 -t nat -A POSTROUTING ${1:+"$1"} ${2:+"$2"} -j MASQUERADE
 }
 
 firewall() {
@@ -172,23 +243,44 @@ firewall() {
 
     # Output Rules
     reject6 OUTPUT "-m owner --uid-owner debian-transmission"
+}
 
+dscp_tagging() {
+    skip_dscp POSTROUTING "-m dscp ! --dscp 0x00"
+
+    #Destination Based
+    dscp4 POSTROUTING "$TO_BRIDGE" \
+      "-m physdev ! --physdev-is-bridged -p tcp --dport https" 0x08
+    dscp POSTROUTING "$TO_BRIDGE" "-p udp --dport domain" 0x2e
+    dscp POSTROUTING "$TO_BRIDGE" "-p tcp --dport ssh" 0x04
+
+    #Source Based
+    dscp POSTROUTING "$TO_BRIDGE" "-p tcp -m multiport --sports http,https" 0x02
+    dscp POSTROUTING "$TO_BRIDGE" "-p tcp --sport http-alt" 0x04
+    dscp POSTROUTING "$TO_BRIDGE" "-p tcp --sport ssh" 0x04
+}
+
+split_routing() {
     # Restore Marks
-    restore4 PREROUTING
-    restore4 OUTPUT
+    restore_mark4 PREROUTING
+    restore_mark4 OUTPUT
 
     # Mark Rules
-    mark4 OUTPUT "-o lo" 0x99/0xff
+    skip_mark4 OUTPUT "-o lo"
+    skip_mark4 OUTPUT "-m mark ! --mark 0x00/0xff"
     mark4 OUTPUT "-m owner --uid-owner debian-transmission" 0x02/0xff
     mark4 OUTPUT "" 0x01/0xff
 
     # Save Marks
-    save4 OUTPUT
+    save_mark4 OUTPUT
 
     # Masquerade
-    masquerade4
+    masquerade4 "$TO_VPN" "-m mark --mark 0x02/0xff"
+    masquerade4 "$TO_BRIDGE" "-m mark --mark 0x01/0xff"
 }
 
 policies
 flush_firewall
 firewall
+dscp_tagging
+split_routing
