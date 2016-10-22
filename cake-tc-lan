@@ -6,7 +6,7 @@ TC=tc-adv
 IP=ip
 PACKET_SIZE=1514 # in bytes
 BQL=$(( 2 * ${PACKET_SIZE} )) # in bytes
-ECAKE_OPTS="lan besteffort dual-dsthost"
+ECAKE_OPTS="lan diffserv-llt dual-dsthost"
 ICAKE_OPTS="lan diffserv-llt dual-srchost"
 
 flush_qdisc() {
