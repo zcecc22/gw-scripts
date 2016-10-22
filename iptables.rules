@@ -255,8 +255,10 @@ dscp_tagging() {
     dscp POSTROUTING "$TO_BRIDGE" "-p tcp --dport ssh" 0x04
 
     #Source Based
-    dscp POSTROUTING "$TO_BRIDGE" "-p tcp -m multiport --sports http,https" 0x02
-    dscp POSTROUTING "$TO_BRIDGE" "-p tcp --sport http-alt" 0x04
+    dscp POSTROUTING "$TO_BRIDGE" \
+      "-m physdev ! --physdev-is-bridged -p tcp -m multiport --sports http,https" 0x02
+    dscp POSTROUTING "$TO_BRIDGE" \
+      "-m physdev ! --physdev-is-bridged -p tcp --sport http-alt" 0x04
     dscp POSTROUTING "$TO_BRIDGE" "-p tcp --sport ssh" 0x04
 }
 
