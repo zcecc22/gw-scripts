@@ -5,7 +5,7 @@ LINK=200000 # in kbps
 TC=tc-adv
 PACKET_SIZE=1514 # in bytes
 BQL=$(( 1 * ${PACKET_SIZE} )) # in bytes
-CAKE_OPTS="rtt 50ms besteffort dual-dsthost"
+CAKE_OPTS="rtt 20ms besteffort dual-dsthost"
 
 flush_qdisc() {
     $TC qdisc del dev ${IF} root 2> /dev/null

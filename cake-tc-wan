@@ -4,8 +4,8 @@ IF=enp2s0
 LINK=12000 # in kbps
 TC=tc-adv
 PACKET_SIZE=1514 # in bytes
-BQL=$(( 4 * ${PACKET_SIZE} )) # in bytes
-CAKE_OPTS="rtt 50ms diffserv-llt dual-srchost"
+BQL=$(( 2 * ${PACKET_SIZE} )) # in bytes
+CAKE_OPTS="rtt 20ms diffserv-llt dual-srchost"
 
 flush_qdisc() {
     $TC qdisc del dev ${IF} root 2> /dev/null
