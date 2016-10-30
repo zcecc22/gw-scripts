@@ -3,12 +3,9 @@
 LAN_IF=eno1
 WAN_IF=enp2s0
 BRIDGE_IF=br0
-VPN_IF=tun0
 
 FROM_BRIDGE="-i ${BRIDGE_IF}"
 TO_BRIDGE="-o ${BRIDGE_IF}"
-FROM_VPN="-i ${VPN_IF}"
-TO_VPN="-o ${VPN_IF}"
 FROM_LO="-i lo"
 TO_LO="-o lo"
 
@@ -20,6 +17,13 @@ TO_WAN="${TO_BRIDGE} -m physdev --physdev-out ${WAN_IF}"
 
 FROM_WAN_TO_LAN="${FROM_WAN} ${TO_LAN}"
 FROM_LAN_TO_WAN="${FROM_LAN} ${TO_WAN}"
+
+MARK_MASK="0xff"
+FOR_BRIDGE="0x01/${MARK_MASK}"
+FOR_DEFAULT="0x99/${MARK_MASK}"
+FOR_ANY="0x00/${MARK_MASK}"
+
+TO_ALL=""
 
 ipt() {
     iptables $* 2>&1
@@ -170,42 +174,42 @@ skip_dscp6() {
 }
 
 mark() {
-    ipt -t mangle -A ${1:+"$1"} ${2:+"$2"} -m mark --mark 0x00/0xff \
+    ipt -t mangle -A ${1:+"$1"} ${2:+"$2"} -m mark --mark "$FOR_ANY" \
       -j MARK --set-mark ${3:+"$3"}
 }
 
 mark4() {
-    ipt4 -t mangle -A ${1:+"$1"} ${2:+"$2"} -m mark --mark 0x00/0xff \
+    ipt4 -t mangle -A ${1:+"$1"} ${2:+"$2"} -m mark --mark "$FOR_ANY" \
       -j MARK --set-mark ${3:+"$3"}
 }
 
 mark6() {
-    ipt6 -t mangle -A ${1:+"$1"} ${2:+"$2"} -m mark --mark 0x00/0xff \
+    ipt6 -t mangle -A ${1:+"$1"} ${2:+"$2"} -m mark --mark "$FOR_ANY" \
       -j MARK --set-mark ${3:+"$3"}
 }
 
 save_mark() {
-    ipt -t mangle -A ${1:+"$1"} -j CONNMARK --save-mark
+    ipt -t mangle -A ${1:+"$1"} -j CONNMARK --save-mark --mask "$MARK_MASK"
 }
 
 save_mark4() {
-    ipt4 -t mangle -A ${1:+"$1"} -j CONNMARK --save-mark
+    ipt4 -t mangle -A ${1:+"$1"} -j CONNMARK --save-mark --mask "$MARK_MASK"
 }
 
 save_mark6() {
-    ipt6 -t mangle -A ${1:+"$1"} -j CONNMARK --save-mark
+    ipt6 -t mangle -A ${1:+"$1"} -j CONNMARK --save-mark --mask "$MARK_MASK"
 }
 
 restore_mark() {
-    ipt -t mangle -A ${1:+"$1"} -j CONNMARK --restore-mark
+    ipt -t mangle -A ${1:+"$1"} -j CONNMARK --restore-mark --mask "$MARK_MASK"
 }
 
 restore_mark4() {
-    ipt4 -t mangle -A ${1:+"$1"} -j CONNMARK --restore-mark
+    ipt4 -t mangle -A ${1:+"$1"} -j CONNMARK --restore-mark --mask "$MARK_MASK"
 }
 
 restore_mark6() {
-    ipt6 -t mangle -A ${1:+"$1"} -j CONNMARK --restore-mark
+    ipt6 -t mangle -A ${1:+"$1"} -j CONNMARK --restore-mark --mask "$MARK_MASK"
 }
 
 masquerade() {
@@ -242,7 +246,7 @@ firewall() {
     drop FORWARD
 
     # Output Rules
-    reject6 OUTPUT "-m owner --uid-owner debian-transmission"
+    reject OUTPUT "$TO_BRIDGE" "-m owner --uid-owner debian-transmission"
 }
 
 dscp_tagging() {
@@ -266,17 +270,16 @@ split_routing() {
     restore_mark4 OUTPUT
 
     # Mark Rules
-    skip_mark4 OUTPUT "-o lo"
-    skip_mark4 OUTPUT "-m mark ! --mark 0x00/0xff"
-    mark4 OUTPUT "-m owner --uid-owner debian-transmission" 0x02/0xff
-    mark4 OUTPUT "" 0x01/0xff
+    skip_mark4 OUTPUT "-m mark ! --mark $FOR_ANY"
+    mark4 OUTPUT "$TO_LO" "$FOR_DEFAULT"
+    mark4 OUTPUT "-m owner --uid-owner debian-transmission" "$FOR_DEFAULT"
+    mark4 OUTPUT "$TO_ALL" "$FOR_BRIDGE"
 
     # Save Marks
     save_mark4 OUTPUT
 
     # Masquerade
-    masquerade4 "$TO_VPN" "-m mark --mark 0x02/0xff"
-    masquerade4 "$TO_BRIDGE" "-m mark --mark 0x01/0xff"
+    masquerade4 "$TO_BRIDGE" "-m mark --mark $FOR_BRIDGE"
 }
 
 policies
