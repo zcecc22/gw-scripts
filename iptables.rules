@@ -233,7 +233,7 @@ firewall() {
     allow_conntrack_in INPUT
     allow_dhcp_in INPUT "$FROM_WAN"
     allow_icmp_in INPUT "$FROM_WAN"
-    allow INPUT "$FROM_WAN" "-p tcp -m multiport --dports ssh,http,http-alt,https"
+    allow INPUT "$FROM_WAN" "-p tcp -m multiport --dports ssh,http,https"
     allow INPUT "$FROM_LAN"
     drop INPUT
 
@@ -255,12 +255,10 @@ dscp_tagging() {
     #Destination Based
     dscp4 POSTROUTING "$TO_BRIDGE" \
       "-m physdev ! --physdev-is-bridged -p tcp --dport https" 0x08
-    dscp POSTROUTING "$TO_BRIDGE" "-p udp --dport domain" 0x2e
+    dscp POSTROUTING "$TO_BRIDGE" "-p udp --dport domain" 0x04
     dscp POSTROUTING "$TO_BRIDGE" "-p tcp --dport ssh" 0x04
 
     #Source Based
-    dscp POSTROUTING "$TO_BRIDGE" \
-      "-m physdev ! --physdev-is-bridged -p tcp --sport http-alt" 0x04
     dscp POSTROUTING "$TO_BRIDGE" "-p tcp --sport ssh" 0x04
 }
 
