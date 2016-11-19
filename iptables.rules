@@ -251,15 +251,10 @@ firewall() {
 
 dscp_tagging() {
     skip_dscp POSTROUTING "-m dscp ! --dscp 0x00"
-
-    #Destination Based
     dscp4 POSTROUTING "$TO_BRIDGE" \
       "-m physdev ! --physdev-is-bridged -p tcp --dport https" 0x08
     dscp POSTROUTING "$TO_BRIDGE" "-p udp --dport domain" 0x04
     dscp POSTROUTING "$TO_BRIDGE" "-p tcp --dport ssh" 0x04
-
-    #Source Based
-    dscp POSTROUTING "$TO_BRIDGE" "-p tcp --sport ssh" 0x04
 }
 
 split_routing() {
