@@ -3,7 +3,10 @@
 LAN_IF=eno1
 WAN_IF=enp2s0
 BRIDGE_IF=br0
+VPN_IF=tun+
 
+FROM_VPN="-i ${VPN_IF}"
+TO_VPN="-o ${VPN_IF}"
 FROM_BRIDGE="-i ${BRIDGE_IF}"
 TO_BRIDGE="-o ${BRIDGE_IF}"
 FROM_LO="-i lo"
@@ -24,6 +27,7 @@ FOR_DEFAULT="0x99/${MARK_MASK}"
 FOR_ANY="0x00/${MARK_MASK}"
 
 TO_ALL=""
+ANY=""
 
 ipt() {
     iptables $* 2>&1
@@ -251,8 +255,8 @@ firewall() {
 
 dscp_tagging() {
     skip_dscp POSTROUTING "-m dscp ! --dscp 0x00"
-    dscp4 POSTROUTING "$TO_BRIDGE" \
-      "-m physdev ! --physdev-is-bridged -p tcp --dport https" 0x08
+    dscp4 POSTROUTING "$TO_VPN" "-p icmp" 0x01
+    dscp4 POSTROUTING "$TO_VPN" "$ANY" 0x08
     dscp POSTROUTING "$TO_BRIDGE" "-p udp --dport domain" 0x04
     dscp POSTROUTING "$TO_BRIDGE" "-p tcp --dport ssh" 0x04
 }
