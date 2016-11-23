@@ -5,10 +5,12 @@ WAN_IF=enp2s0
 BRIDGE_IF=br0
 VPN_IF=tun+
 
-FROM_VPN="-i ${VPN_IF}"
-TO_VPN="-o ${VPN_IF}"
 FROM_BRIDGE="-i ${BRIDGE_IF}"
 TO_BRIDGE="-o ${BRIDGE_IF}"
+
+FROM_VPN="-i ${VPN_IF}"
+TO_VPN="-o ${VPN_IF}"
+
 FROM_LO="-i lo"
 TO_LO="-o lo"
 
