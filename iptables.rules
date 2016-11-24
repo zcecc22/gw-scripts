@@ -177,18 +177,6 @@ dscp6() {
       -j DSCP --set-dscp ${4:+"$4"}
 }
 
-skip_mark() {
-    ipt -t mangle -A ${1:+"$1"} ${2:+"$2"} -j RETURN
-}
-
-skip_mark4() {
-    ipt4 -t mangle -A ${1:+"$1"} ${2:+"$2"} -j RETURN
-}
-
-skip_mark6() {
-    ipt6 -t mangle -A ${1:+"$1"} ${2:+"$2"} -j RETURN
-}
-
 skip_dscp() {
     ipt -t mangle -A ${1:+"$1"} ${2:+"$2"} -j RETURN
 }
@@ -214,6 +202,18 @@ mark4() {
 mark6() {
     ipt6 -t mangle -A ${1:+"$1"} ${2:+"$2"} -m mark --mark "$FOR_ANY" \
       -j MARK --set-mark ${3:+"$3"}
+}
+
+skip_mark() {
+    ipt -t mangle -A ${1:+"$1"} ${2:+"$2"} -j RETURN
+}
+
+skip_mark4() {
+    ipt4 -t mangle -A ${1:+"$1"} ${2:+"$2"} -j RETURN
+}
+
+skip_mark6() {
+    ipt6 -t mangle -A ${1:+"$1"} ${2:+"$2"} -j RETURN
 }
 
 save_mark() {
@@ -255,22 +255,31 @@ masquerade6() {
 firewall() {
     policies
 
+    # Input Chain from_wan_handling
+    ipt -t filter -N from_wan_handling
+    jump4 from_wan_handling "$FROM_ALL" "-p icmp" icmp_handling
+    jump6 from_wan_handling "$FROM_ALL" "-p icmpv6" icmp_handling
+    allow_dhcp_in from_wan_handling "$FROM_ALL"
+    allow from_wan_handling "$FROM_ALL" "-p tcp -m multiport --dports ssh,http,https"
+    drop from_wan_handling
+
+    # Forward Chain from_wan_to_lan_handling
+    ipt -t filter -N from_wan_to_lan_handling
+    jump4 from_wan_to_lan_handling "$FROM_ALL" "-p icmp" icmp_handling
+    jump6 from_wan_to_lan_handling "$FROM_ALL" "-p icmpv6" icmp_handling
+    allow_dhcp_in from_wan_to_lan_handling "$FROM_ALL"
+    drop from_wan_to_lan_handling
+
     # Input Rules
     jump INPUT "$FROM_ALL" "$ALL" general_inbound
-    jump4 INPUT "$FROM_WAN" "-p icmp" icmp_handling
-    jump4 INPUT "$FROM_VPN" "-p icmp" icmp_handling
-    jump6 INPUT "$FROM_WAN" "-p icmpv6" icmp_handling
-    allow_dhcp_in INPUT "$FROM_WAN"
-    allow INPUT "$FROM_WAN" "-p tcp -m multiport --dports ssh,http,https"
+    jump INPUT "$FROM_WAN" "$ALL" from_wan_handling
     allow INPUT "$FROM_LO"
     allow INPUT "$FROM_LAN"
     drop INPUT
 
     # Forward Rules
     jump FORWARD "$FROM_ALL" "$ALL" general_inbound
-    jump4 FORWARD "$FROM_WAN_TO_LAN" "-p icmp" icmp_handling
-    jump6 FORWARD "$FROM_WAN_TO_LAN" "-p icmpv6" icmp_handling
-    allow_dhcp_in FORWARD "$FROM_WAN_TO_LAN"
+    jump FORWARD "$FROM_WAN_TO_LAN" "$ALL" from_wan_to_lan_handling
     allow FORWARD "$FROM_LAN_TO_WAN"
     drop FORWARD
 
