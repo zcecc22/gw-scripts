@@ -100,10 +100,9 @@ chain_icmp_handling() {
     drop6 icmp_handling
 }
 
-chain_dhcp_handling() {
-    ipt -t filter -N dhcp_handling
-    allow4 dhcp_handling "-p udp -m udp --dport 68"
-    allow6 dhcp_handling "-s fe80::/10 -d fe80::/10 -p udp -m udp --sport 547 --dport 546"
+allow_dhcp_in() {
+    allow4 "$1" "$2" "-p udp -m udp --dport 68"
+    allow6 "$1" "$2" "-s fe80::/10 -d fe80::/10 -p udp -m udp --sport 547 --dport 546"
 }
 
 drop_fragments_from() {
@@ -261,7 +260,7 @@ firewall() {
     jump4 INPUT "$FROM_WAN" "-p icmp" icmp_handling
     jump4 INPUT "$FROM_VPN" "-p icmp" icmp_handling
     jump6 INPUT "$FROM_WAN" "-p icmpv6" icmp_handling
-    jump INPUT "$FROM_WAN" "-p udp" dhcp_handling
+    allow_dhcp_in INPUT "$FROM_WAN"
     allow INPUT "$FROM_WAN" "-p tcp -m multiport --dports ssh,http,https"
     allow INPUT "$FROM_LO"
     allow INPUT "$FROM_LAN"
@@ -271,7 +270,7 @@ firewall() {
     jump FORWARD "$FROM_ALL" "$ALL" general_inbound
     jump4 FORWARD "$FROM_WAN_TO_LAN" "-p icmp" icmp_handling
     jump6 FORWARD "$FROM_WAN_TO_LAN" "-p icmpv6" icmp_handling
-    jump FORWARD "$FROM_WAN_TO_LAN" "-p udp" dhcp_handling
+    allow_dhcp_in FORWARD "$FROM_WAN_TO_LAN"
     allow FORWARD "$FROM_LAN_TO_WAN"
     drop FORWARD
 
@@ -308,7 +307,6 @@ split_routing() {
 policies
 flush_firewall
 chain_general_inboud
-chain_dhcp_handling
 chain_icmp_handling
 firewall
 dscp_tagging
