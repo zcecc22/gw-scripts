@@ -29,7 +29,7 @@ FOR_DEFAULT="0x99/${MARK_MASK}"
 FOR_ANY="0x00/${MARK_MASK}"
 
 TO_ALL=""
-ANY=""
+ALL=""
 
 ipt() {
     iptables $* 2>&1
@@ -61,38 +61,49 @@ policies() {
     ipt -t filter -P FORWARD ACCEPT
 }
 
-allow_icmp_in() {
-    allow4 "$1" "$2" "-p icmp --icmp-type 0"
-    allow4 "$1" "$2" "-p icmp --icmp-type 3"
-    allow4 "$1" "$2" "-p icmp --icmp-type 8"
-    allow4 "$1" "$2" "-p icmp --icmp-type 11"
-
-    allow6 "$1" "$2" "-p ipv6-icmp --icmpv6-type 1"
-    allow6 "$1" "$2" "-p ipv6-icmp --icmpv6-type 2"
-    allow6 "$1" "$2" "-p ipv6-icmp --icmpv6-type 3"
-    allow6 "$1" "$2" "-p ipv6-icmp --icmpv6-type 4"
-    allow6 "$1" "$2" "-p ipv6-icmp --icmpv6-type 128"
-    allow6 "$1" "$2" "-p ipv6-icmp --icmpv6-type 133"
-    allow6 "$1" "$2" "-p ipv6-icmp --icmpv6-type 134"
-    allow6 "$1" "$2" "-p ipv6-icmp --icmpv6-type 135"
-    allow6 "$1" "$2" "-p ipv6-icmp --icmpv6-type 136"
-    allow6 "$1" "$2" "-p ipv6-icmp --icmpv6-type 137"
-    allow6 "$1" "$2" "-p ipv6-icmp --icmpv6-type 141"
-    allow6 "$1" "$2" "-p ipv6-icmp --icmpv6-type 142"
-    allow6 "$1" "$2" "-s fe80::/10 -p ipv6-icmp --icmpv6-type 130"
-    allow6 "$1" "$2" "-s fe80::/10 -p ipv6-icmp --icmpv6-type 131"
-    allow6 "$1" "$2" "-s fe80::/10 -p ipv6-icmp --icmpv6-type 132"
-    allow6 "$1" "$2" "-s fe80::/10 -p ipv6-icmp --icmpv6-type 143"
-    allow6 "$1" "$2" "-p ipv6-icmp --icmpv6-type 148"
-    allow6 "$1" "$2" "-p ipv6-icmp --icmpv6-type 149"
-    allow6 "$1" "$2" "-s fe80::/10 -p ipv6-icmp --icmpv6-type 151"
-    allow6 "$1" "$2" "-s fe80::/10 -p ipv6-icmp --icmpv6-type 152"
-    allow6 "$1" "$2" "-s fe80::/10 -p ipv6-icmp --icmpv6-type 153"
+chain_general_inboud() {
+    ipt -t filter -N general_inbound
+    allow_conntrack_in general_inbound
+    drop_fragments_from general_inbound
 }
 
-allow_dhcp_in() {
-    allow4 "$1" "$2" "-p udp -m udp --dport 68"
-    allow6 "$1" "$2" "-s fe80::/10 -d fe80::/10 -p udp -m udp --sport 547 --dport 546"
+chain_icmp_handling() {
+    ipt -t filter -N icmp_handling
+
+    allow4 icmp_handling "-p icmp --icmp-type 0"
+    allow4 icmp_handling "-p icmp --icmp-type 3"
+    allow4 icmp_handling "-p icmp --icmp-type 8"
+    allow4 icmp_handling "-p icmp --icmp-type 11"
+    drop4 icmp_handling
+
+    allow6 icmp_handling "-p ipv6-icmp --icmpv6-type 1"
+    allow6 icmp_handling "-p ipv6-icmp --icmpv6-type 2"
+    allow6 icmp_handling "-p ipv6-icmp --icmpv6-type 3"
+    allow6 icmp_handling "-p ipv6-icmp --icmpv6-type 4"
+    allow6 icmp_handling "-p ipv6-icmp --icmpv6-type 128"
+    allow6 icmp_handling "-p ipv6-icmp --icmpv6-type 133"
+    allow6 icmp_handling "-p ipv6-icmp --icmpv6-type 134"
+    allow6 icmp_handling "-p ipv6-icmp --icmpv6-type 135"
+    allow6 icmp_handling "-p ipv6-icmp --icmpv6-type 136"
+    allow6 icmp_handling "-p ipv6-icmp --icmpv6-type 137"
+    allow6 icmp_handling "-p ipv6-icmp --icmpv6-type 141"
+    allow6 icmp_handling "-p ipv6-icmp --icmpv6-type 142"
+    allow6 icmp_handling "-s fe80::/10 -p ipv6-icmp --icmpv6-type 130"
+    allow6 icmp_handling "-s fe80::/10 -p ipv6-icmp --icmpv6-type 131"
+    allow6 icmp_handling "-s fe80::/10 -p ipv6-icmp --icmpv6-type 132"
+    allow6 icmp_handling "-s fe80::/10 -p ipv6-icmp --icmpv6-type 143"
+    allow6 icmp_handling "-p ipv6-icmp --icmpv6-type 148"
+    allow6 icmp_handling "-p ipv6-icmp --icmpv6-type 149"
+    allow6 icmp_handling "-s fe80::/10 -p ipv6-icmp --icmpv6-type 151"
+    allow6 icmp_handling "-s fe80::/10 -p ipv6-icmp --icmpv6-type 152"
+    allow6 icmp_handling "-s fe80::/10 -p ipv6-icmp --icmpv6-type 153"
+    drop6 icmp_handling
+}
+
+chain_dhcp_handling() {
+    ipt -t filter -N dhcp_handling
+    allow4 dhcp_handling "-p udp -m udp --dport 68"
+    allow6 dhcp_handling "-s fe80::/10 -d fe80::/10 -p udp -m udp --sport 547 --dport 546"
 }
 
 drop_fragments_from() {
@@ -100,8 +111,12 @@ drop_fragments_from() {
 }
 
 allow_conntrack_in() {
-    drop "$1" "-m conntrack --ctstate INVALID"
     allow "$1" "-m conntrack --ctstate RELATED,ESTABLISHED"
+    drop "$1" "-m conntrack --ctstate INVALID"
+}
+
+jump() {
+    ipt -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j ${4:+"$4"}
 }
 
 allow() {
@@ -116,6 +131,10 @@ drop() {
     ipt -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j DROP
 }
 
+jump4() {
+    ipt4 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j ${4:+"$4"}
+}
+
 allow4() {
     ipt4 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j ACCEPT
 }
@@ -126,6 +145,10 @@ reject4() {
 
 drop4() {
     ipt4 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j DROP
+}
+
+jump6() {
+    ipt6 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j ${4:+"$4"}
 }
 
 allow6() {
@@ -234,20 +257,21 @@ firewall() {
     policies
 
     # Input Rules
-    allow INPUT "$FROM_LO"
-    drop_fragments_from INPUT
-    allow_conntrack_in INPUT
-    allow_dhcp_in INPUT "$FROM_WAN"
-    allow_icmp_in INPUT "$FROM_WAN"
+    jump INPUT "$FROM_ALL" "$ALL" general_inbound
+    jump4 INPUT "$FROM_WAN" "-p icmp" icmp_handling
+    jump4 INPUT "$FROM_VPN" "-p icmp" icmp_handling
+    jump6 INPUT "$FROM_WAN" "-p icmpv6" icmp_handling
+    jump INPUT "$FROM_WAN" "-p udp" dhcp_handling
     allow INPUT "$FROM_WAN" "-p tcp -m multiport --dports ssh,http,https"
+    allow INPUT "$FROM_LO"
     allow INPUT "$FROM_LAN"
     drop INPUT
 
     # Forward Rules
-    drop_fragments_from FORWARD
-    allow_conntrack_in FORWARD
-    allow_dhcp_in FORWARD "$FROM_WAN_TO_LAN"
-    allow_icmp_in FORWARD "$FROM_WAN_TO_LAN"
+    jump FORWARD "$FROM_ALL" "$ALL" general_inbound
+    jump4 FORWARD "$FROM_WAN_TO_LAN" "-p icmp" icmp_handling
+    jump6 FORWARD "$FROM_WAN_TO_LAN" "-p icmpv6" icmp_handling
+    jump FORWARD "$FROM_WAN_TO_LAN" "-p udp" dhcp_handling
     allow FORWARD "$FROM_LAN_TO_WAN"
     drop FORWARD
 
@@ -258,7 +282,7 @@ firewall() {
 dscp_tagging() {
     skip_dscp POSTROUTING "-m dscp ! --dscp 0x00"
     dscp4 POSTROUTING "$TO_VPN" "-p icmp" 0x01
-    dscp4 POSTROUTING "$TO_VPN" "$ANY" 0x08
+    dscp4 POSTROUTING "$TO_VPN" "$ALL" 0x08
     dscp POSTROUTING "$TO_BRIDGE" "-p udp --dport domain" 0x04
     dscp POSTROUTING "$TO_BRIDGE" "-p tcp --dport ssh" 0x04
 }
@@ -283,6 +307,9 @@ split_routing() {
 
 policies
 flush_firewall
+chain_general_inboud
+chain_dhcp_handling
+chain_icmp_handling
 firewall
 dscp_tagging
 split_routing
