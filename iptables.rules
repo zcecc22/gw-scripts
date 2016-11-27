@@ -345,7 +345,7 @@ split_routing() {
     restore_mark4 OUTPUT
 
     # Mangle Chain route_output
-    ipt -t mangle -N route_output
+    ipt4 -t mangle -N route_output
     mark4 route_output "$TO_LO" "$FOR_DEFAULT"
     mark4 route_output "-m owner --uid-owner debian-transmission" "$FOR_DEFAULT"
     mark4 route_output "$TO_ALL" "$FOR_BRIDGE"
