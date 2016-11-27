@@ -5,30 +5,29 @@ WAN_IF=enp2s0
 BRIDGE_IF=br0
 VPN_IF=tun+
 
+FROM_ALL=""
 FROM_BRIDGE="-i ${BRIDGE_IF}"
-TO_BRIDGE="-o ${BRIDGE_IF}"
-
-FROM_VPN="-i ${VPN_IF}"
-TO_VPN="-o ${VPN_IF}"
-
-FROM_LO="-i lo"
-TO_LO="-o lo"
-
-FROM_LAN="${FROM_BRIDGE} -m physdev --physdev-in ${LAN_IF}"
 FROM_WAN="${FROM_BRIDGE} -m physdev --physdev-in ${WAN_IF}"
+FROM_LAN="${FROM_BRIDGE} -m physdev --physdev-in ${LAN_IF}"
+FROM_VPN="-i ${VPN_IF}"
+FROM_LO="-i lo"
 
-TO_LAN="${TO_BRIDGE} -m physdev --physdev-out ${LAN_IF}"
+TO_ALL=""
+TO_BRIDGE="-o ${BRIDGE_IF}"
 TO_WAN="${TO_BRIDGE} -m physdev --physdev-out ${WAN_IF}"
+TO_LAN="${TO_BRIDGE} -m physdev --physdev-out ${LAN_IF}"
+TO_VPN="-o ${VPN_IF}"
+TO_LO="-o lo"
 
 FROM_WAN_TO_LAN="${FROM_WAN} ${TO_LAN}"
 FROM_LAN_TO_WAN="${FROM_LAN} ${TO_WAN}"
+FROM_ALL_TO_ALL=""
 
 MARK_MASK="0xff"
 FOR_BRIDGE="0x01/${MARK_MASK}"
 FOR_DEFAULT="0x99/${MARK_MASK}"
 FOR_ANY="0x00/${MARK_MASK}"
 
-TO_ALL=""
 ALL=""
 
 ipt() {
@@ -67,37 +66,37 @@ chain_general_tracking() {
     drop_fragments_from general_tracking
 }
 
-chain_icmp_handling() {
-    ipt -t filter -N icmp_handling
+chain_icmp() {
+    ipt -t filter -N icmp
 
-    allow4 icmp_handling "-p icmp --icmp-type 0"
-    allow4 icmp_handling "-p icmp --icmp-type 3"
-    allow4 icmp_handling "-p icmp --icmp-type 8"
-    allow4 icmp_handling "-p icmp --icmp-type 11"
-    drop4 icmp_handling
+    allow4 icmp "-p icmp --icmp-type 0"
+    allow4 icmp "-p icmp --icmp-type 3"
+    allow4 icmp "-p icmp --icmp-type 8"
+    allow4 icmp "-p icmp --icmp-type 11"
+    drop4 icmp
 
-    allow6 icmp_handling "-p ipv6-icmp --icmpv6-type 1"
-    allow6 icmp_handling "-p ipv6-icmp --icmpv6-type 2"
-    allow6 icmp_handling "-p ipv6-icmp --icmpv6-type 3"
-    allow6 icmp_handling "-p ipv6-icmp --icmpv6-type 4"
-    allow6 icmp_handling "-p ipv6-icmp --icmpv6-type 128"
-    allow6 icmp_handling "-p ipv6-icmp --icmpv6-type 133"
-    allow6 icmp_handling "-p ipv6-icmp --icmpv6-type 134"
-    allow6 icmp_handling "-p ipv6-icmp --icmpv6-type 135"
-    allow6 icmp_handling "-p ipv6-icmp --icmpv6-type 136"
-    allow6 icmp_handling "-p ipv6-icmp --icmpv6-type 137"
-    allow6 icmp_handling "-p ipv6-icmp --icmpv6-type 141"
-    allow6 icmp_handling "-p ipv6-icmp --icmpv6-type 142"
-    allow6 icmp_handling "-s fe80::/10 -p ipv6-icmp --icmpv6-type 130"
-    allow6 icmp_handling "-s fe80::/10 -p ipv6-icmp --icmpv6-type 131"
-    allow6 icmp_handling "-s fe80::/10 -p ipv6-icmp --icmpv6-type 132"
-    allow6 icmp_handling "-s fe80::/10 -p ipv6-icmp --icmpv6-type 143"
-    allow6 icmp_handling "-p ipv6-icmp --icmpv6-type 148"
-    allow6 icmp_handling "-p ipv6-icmp --icmpv6-type 149"
-    allow6 icmp_handling "-s fe80::/10 -p ipv6-icmp --icmpv6-type 151"
-    allow6 icmp_handling "-s fe80::/10 -p ipv6-icmp --icmpv6-type 152"
-    allow6 icmp_handling "-s fe80::/10 -p ipv6-icmp --icmpv6-type 153"
-    drop6 icmp_handling
+    allow6 icmp "-p icmpv6 --icmpv6-type 1"
+    allow6 icmp "-p icmpv6 --icmpv6-type 2"
+    allow6 icmp "-p icmpv6 --icmpv6-type 3"
+    allow6 icmp "-p icmpv6 --icmpv6-type 4"
+    allow6 icmp "-p icmpv6 --icmpv6-type 128"
+    allow6 icmp "-p icmpv6 --icmpv6-type 133"
+    allow6 icmp "-p icmpv6 --icmpv6-type 134"
+    allow6 icmp "-p icmpv6 --icmpv6-type 135"
+    allow6 icmp "-p icmpv6 --icmpv6-type 136"
+    allow6 icmp "-p icmpv6 --icmpv6-type 137"
+    allow6 icmp "-p icmpv6 --icmpv6-type 141"
+    allow6 icmp "-p icmpv6 --icmpv6-type 142"
+    allow6 icmp "-s fe80::/10 -p icmpv6 --icmpv6-type 130"
+    allow6 icmp "-s fe80::/10 -p icmpv6 --icmpv6-type 131"
+    allow6 icmp "-s fe80::/10 -p icmpv6 --icmpv6-type 132"
+    allow6 icmp "-s fe80::/10 -p icmpv6 --icmpv6-type 143"
+    allow6 icmp "-p icmpv6 --icmpv6-type 148"
+    allow6 icmp "-p icmpv6 --icmpv6-type 149"
+    allow6 icmp "-s fe80::/10 -p icmpv6 --icmpv6-type 151"
+    allow6 icmp "-s fe80::/10 -p icmpv6 --icmpv6-type 152"
+    allow6 icmp "-s fe80::/10 -p icmpv6 --icmpv6-type 153"
+    drop6 icmp
 }
 
 allow_dhcp_in() {
@@ -255,20 +254,21 @@ masquerade6() {
 firewall() {
     # Input Chain input_wan
     ipt -t filter -N input_wan
-    jump4 filter input_wan "$FROM_ALL" "-p icmp" icmp_handling
-    jump6 filter input_wan "$FROM_ALL" "-p icmpv6" icmp_handling
+    jump4 filter input_wan "$FROM_ALL" "-p icmp" icmp
+    jump6 filter input_wan "$FROM_ALL" "-p icmpv6" icmp
     allow_dhcp_in input_wan "$FROM_ALL"
     allow input_wan "$FROM_ALL" "-p tcp -m multiport --dports ssh,http,https"
     drop input_wan
 
-    # Input Chain input_vpn
-    ipt -t filter -N input_vpn
-    jump4 filter input_vpn "$FROM_ALL" "-p icmp" icmp_handling
-    drop input_vpn
-
     # Input Chain input_lan
     ipt -t filter -N input_lan
     allow input_lan "$FROM_ALL" "$ALL"
+
+    # Input Chain input_vpn
+    ipt -t filter -N input_vpn
+    jump4 filter input_vpn "$FROM_ALL" "-p icmp" icmp
+    jump6 filter input_vpn "$FROM_ALL" "-p icmpv6" icmp
+    drop input_vpn
 
     # Input Chain input_lo
     ipt -t filter -N input_lo
@@ -276,8 +276,8 @@ firewall() {
 
     # Forward Chain forward_wan_to_lan
     ipt -t filter -N forward_wan_to_lan
-    jump4 filter forward_wan_to_lan "$FROM_ALL" "-p icmp" icmp_handling
-    jump6 filter forward_wan_to_lan "$FROM_ALL" "-p icmpv6" icmp_handling
+    jump4 filter forward_wan_to_lan "$FROM_ALL" "-p icmp" icmp
+    jump6 filter forward_wan_to_lan "$FROM_ALL" "-p icmpv6" icmp
     allow_dhcp_in forward_wan_to_lan "$FROM_ALL"
     drop forward_wan_to_lan
 
@@ -307,7 +307,7 @@ firewall() {
     drop INPUT
 
     # Forward Rules
-    jump filter FORWARD "$FROM_ALL" "$ALL" general_tracking
+    jump filter FORWARD "$FROM_ALL_TO_ALL" "$ALL" general_tracking
     jump filter FORWARD "$FROM_WAN_TO_LAN" "$ALL" forward_wan_to_lan
     jump filter FORWARD "$FROM_LAN_TO_WAN" "$ALL" forward_lan_to_wan
     drop FORWARD
@@ -317,7 +317,7 @@ firewall() {
     jump filter OUTPUT "$TO_BRIDGE" "$ALL" output_bridge
     jump filter OUTPUT "$TO_VPN" "$ALL" output_vpn
     jump filter OUTPUT "$TO_LO" "$ALL" output_lo
-    drop OUTPUT
+    reject OUTPUT
 }
 
 dscp_tagging() {
@@ -361,7 +361,7 @@ split_routing() {
 policies
 flush_firewall
 chain_general_tracking
-chain_icmp_handling
+chain_icmp
 policies
 firewall
 dscp_tagging
