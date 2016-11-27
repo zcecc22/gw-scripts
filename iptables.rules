@@ -23,11 +23,6 @@ FROM_WAN_TO_LAN="${FROM_WAN} ${TO_LAN}"
 FROM_LAN_TO_WAN="${FROM_LAN} ${TO_WAN}"
 FROM_ALL_TO_ALL=""
 
-MARK_MASK="0xff"
-FOR_BRIDGE="0x01/${MARK_MASK}"
-FOR_DEFAULT="0x99/${MARK_MASK}"
-FOR_ANY="0x00/${MARK_MASK}"
-
 ALL=""
 
 ipt() {
@@ -274,17 +269,6 @@ firewall() {
     ipt -t filter -N input_lo
     allow input_lo "$FROM_ALL" "$ALL"
 
-    # Forward Chain forward_wan_to_lan
-    ipt -t filter -N forward_wan_to_lan
-    jump4 filter forward_wan_to_lan "$FROM_ALL" "-p icmp" icmp
-    jump6 filter forward_wan_to_lan "$FROM_ALL" "-p icmpv6" icmp
-    allow_dhcp_in forward_wan_to_lan "$FROM_ALL"
-    drop forward_wan_to_lan
-
-    # Forward Chain forward_lan_to_wan
-    ipt -t filter -N forward_lan_to_wan
-    allow forward_lan_to_wan "$FROM_ALL" "$ALL"
-
     # Output Chain output_bridge
     ipt -t filter -N output_bridge
     reject output_bridge "$TO_ALL" "-m owner --uid-owner debian-transmission"
@@ -298,6 +282,17 @@ firewall() {
     ipt -t filter -N output_lo
     allow output_lo "$TO_ALL" "$ALL"
 
+    # Forward Chain forward_wan_to_lan
+    ipt -t filter -N forward_wan_to_lan
+    jump4 filter forward_wan_to_lan "$FROM_ALL" "-p icmp" icmp
+    jump6 filter forward_wan_to_lan "$FROM_ALL" "-p icmpv6" icmp
+    allow_dhcp_in forward_wan_to_lan "$FROM_ALL"
+    drop forward_wan_to_lan
+
+    # Forward Chain forward_lan_to_wan
+    ipt -t filter -N forward_lan_to_wan
+    allow forward_lan_to_wan "$FROM_ALL" "$ALL"
+
     # Input Rules
     jump filter INPUT "$FROM_ALL" "$ALL" general_tracking
     jump filter INPUT "$FROM_WAN" "$ALL" input_wan
@@ -306,18 +301,18 @@ firewall() {
     jump filter INPUT "$FROM_LO" "$ALL" input_lo
     drop INPUT
 
-    # Forward Rules
-    jump filter FORWARD "$FROM_ALL_TO_ALL" "$ALL" general_tracking
-    jump filter FORWARD "$FROM_WAN_TO_LAN" "$ALL" forward_wan_to_lan
-    jump filter FORWARD "$FROM_LAN_TO_WAN" "$ALL" forward_lan_to_wan
-    drop FORWARD
-
     # Output Rules
     jump filter OUTPUT "$TO_ALL" "$ALL" general_tracking
     jump filter OUTPUT "$TO_BRIDGE" "$ALL" output_bridge
     jump filter OUTPUT "$TO_VPN" "$ALL" output_vpn
     jump filter OUTPUT "$TO_LO" "$ALL" output_lo
     reject OUTPUT
+
+    # Forward Rules
+    jump filter FORWARD "$FROM_ALL_TO_ALL" "$ALL" general_tracking
+    jump filter FORWARD "$FROM_WAN_TO_LAN" "$ALL" forward_wan_to_lan
+    jump filter FORWARD "$FROM_LAN_TO_WAN" "$ALL" forward_lan_to_wan
+    drop FORWARD
 }
 
 dscp_tagging() {
@@ -339,25 +334,6 @@ dscp_tagging() {
     jump4 mangle POSTROUTING "$TO_VPN" "$ALL" dscp_vpn
 }
 
-split_routing() {
-    # Restore Marks
-    restore_mark4 PREROUTING
-    restore_mark4 OUTPUT
-
-    # Mangle Chain route_output
-    ipt4 -t mangle -N route_output
-    mark4 route_output "$TO_LO" "$FOR_DEFAULT"
-    mark4 route_output "-m owner --uid-owner debian-transmission" "$FOR_DEFAULT"
-    mark4 route_output "$TO_ALL" "$FOR_BRIDGE"
-    save_mark4 route_output
-
-    # Output Rules
-    jump4 mangle OUTPUT "$TO_ALL" "-m mark --mark $FOR_ANY" route_output
-
-    # Masquerade
-    masquerade4 "$TO_BRIDGE" "-m mark --mark $FOR_BRIDGE"
-}
-
 policies
 flush_firewall
 chain_general_tracking
@@ -365,4 +341,3 @@ chain_icmp
 policies
 firewall
 dscp_tagging
-split_routing
