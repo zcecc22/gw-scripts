@@ -4,7 +4,7 @@ IF=enp2s0
 LINK=12000 # in kbps
 TC=tc-adv
 PACKET_SIZE=1514 # in bytes
-BQL=$(( 2 * ${PACKET_SIZE} )) # in bytes
+BQL=$(( 1 * ${PACKET_SIZE} )) # in bytes
 CAKE_OPTS="rtt 15ms diffserv-llt dual-srchost"
 
 flush_qdisc() {
