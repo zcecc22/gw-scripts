@@ -25,6 +25,11 @@ FROM_ALL_TO_ALL=""
 
 ALL=""
 
+MARK_MASK="0xff"
+FOR_BRIDGE="0x01/${MARK_MASK}"
+FOR_DEFAULT="0x99/${MARK_MASK}"
+FOR_ANY="0x00/${MARK_MASK}"
+
 ipt() {
     iptables $* 2>&1
     ip6tables $* 2>&1
@@ -170,9 +175,71 @@ skip_dscp6() {
     ipt6 -t mangle -A ${1:+"$1"} ${2:+"$2"} -j ACCEPT
 }
 
+mark() {
+    ipt -t mangle -A ${1:+"$1"} ${2:+"$2"} -m mark --mark "$FOR_ANY" \
+      -j MARK --set-mark ${3:+"$3"}
+}
+
+mark4() {
+    ipt4 -t mangle -A ${1:+"$1"} ${2:+"$2"} -m mark --mark "$FOR_ANY" \
+      -j MARK --set-mark ${3:+"$3"}
+}
+
+mark6() {
+    ipt6 -t mangle -A ${1:+"$1"} ${2:+"$2"} -m mark --mark "$FOR_ANY" \
+      -j MARK --set-mark ${3:+"$3"}
+}
+
+skip_mark() {
+    ipt -t mangle -A ${1:+"$1"} ${2:+"$2"} -j ACCEPT
+}
+
+skip_mark4() {
+    ipt4 -t mangle -A ${1:+"$1"} ${2:+"$2"} -j ACCEPT
+}
+
+skip_mark6() {
+    ipt6 -t mangle -A ${1:+"$1"} ${2:+"$2"} -j ACCEPT
+}
+
+save_mark() {
+    ipt -t mangle -A ${1:+"$1"} -j CONNMARK --save-mark --mask "$MARK_MASK"
+}
+
+save_mark4() {
+    ipt4 -t mangle -A ${1:+"$1"} -j CONNMARK --save-mark --mask "$MARK_MASK"
+}
+
+save_mark6() {
+    ipt6 -t mangle -A ${1:+"$1"} -j CONNMARK --save-mark --mask "$MARK_MASK"
+}
+
+restore_mark() {
+    ipt -t mangle -A ${1:+"$1"} -j CONNMARK --restore-mark --mask "$MARK_MASK"
+}
+
+restore_mark4() {
+    ipt4 -t mangle -A ${1:+"$1"} -j CONNMARK --restore-mark --mask "$MARK_MASK"
+}
+
+restore_mark6() {
+    ipt6 -t mangle -A ${1:+"$1"} -j CONNMARK --restore-mark --mask "$MARK_MASK"
+}
+
+masquerade() {
+    ipt -t nat -A POSTROUTING ${1:+"$1"} ${2:+"$2"} -j MASQUERADE
+}
+
+masquerade4() {
+    ipt4 -t nat -A POSTROUTING ${1:+"$1"} ${2:+"$2"} -j MASQUERADE
+}
+
+masquerade6() {
+    ipt6 -t nat -A POSTROUTING ${1:+"$1"} ${2:+"$2"} -j MASQUERADE
+}
+
 firewall() {
     # INPUT CHAINS
-    
     ipt -t filter -N input_wan
     jump4 filter input_wan "$FROM_ALL" "-p icmp" icmp
     jump6 filter input_wan "$FROM_ALL" "-p icmpv6" icmp
@@ -193,7 +260,6 @@ firewall() {
     allow input_lo "$FROM_ALL" "$ALL"
 
     # OUTPUT CHAINS
-    
     ipt -t filter -N output_bridge
     reject output_bridge "$TO_ALL" "-m owner --uid-owner debian-transmission"
     allow output_bridge "$TO_ALL" "$ALL"
@@ -205,7 +271,6 @@ firewall() {
     allow output_lo "$TO_ALL" "$ALL"
 
     # FORWARD CHAINS
-    
     ipt -t filter -N forward_wan_to_lan
     jump4 filter forward_wan_to_lan "$FROM_ALL" "-p icmp" icmp
     jump6 filter forward_wan_to_lan "$FROM_ALL" "-p icmpv6" icmp
@@ -240,21 +305,39 @@ firewall() {
 
 dscp_tagging() {
     # DSCP CHAINS
-    
     ipt -t mangle -N dscp_bridge
     dscp dscp_bridge "$TO_ALL" "-p udp --dport domain" 0x04
     dscp dscp_bridge "$TO_ALL" "-p tcp --dport ssh" 0x04
     skip_dscp dscp_bridge "$ALL"
-    
-    ipt4 -t mangle -N dscp_vpn
-    dscp4 dscp_vpn "$TO_ALL" "-p icmp" 0x01
-    dscp4 dscp_vpn "$TO_ALL" "$ALL" 0x08
-    skip_dscp4 dscp_vpn "$ALL"
+
+    ipt -t mangle -N dscp_vpn
+    dscp dscp_vpn "$TO_ALL" "-p icmp" 0x01
+    dscp dscp_vpn "$TO_ALL" "$ALL" 0x08
+    skip_dscp dscp_vpn "$ALL"
 
     # DSCP RULES
     skip_dscp POSTROUTING "-m dscp ! --dscp 0x00"
     jump mangle POSTROUTING "$TO_BRIDGE" "$ALL" dscp_bridge
-    jump4 mangle POSTROUTING "$TO_VPN" "$ALL" dscp_vpn
+    jump mangle POSTROUTING "$TO_VPN" "$ALL" dscp_vpn
+}
+
+split_routing() {
+    # RESTORE RULES
+    restore_mark4 PREROUTING
+    restore_mark4 OUTPUT
+
+    # OUTPUT CHAIN
+    ipt4 -t mangle -N route_output
+    mark4 route_output "$TO_LO" "$FOR_DEFAULT"
+    mark4 route_output "-m owner --uid-owner debian-transmission" "$FOR_DEFAULT"
+    mark4 route_output "$TO_ALL" "$FOR_BRIDGE"
+    save_mark4 route_output
+
+    # OUTPUT RULE
+    jump4 mangle OUTPUT "$TO_ALL" "-m mark --mark $FOR_ANY" route_output
+
+    # MASQUERADE
+    masquerade4 "$TO_BRIDGE" "-m mark --mark $FOR_BRIDGE"
 }
 
 policies
@@ -264,3 +347,4 @@ chain_icmp
 policies
 firewall
 dscp_tagging
+split_routing
