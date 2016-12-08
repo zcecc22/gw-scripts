@@ -1,7 +1,7 @@
 #!/bin/sh
 
-LAN_IF=eno1
-WAN_IF=enp2s0
+LAN_IF=enp1s0f0
+WAN_IF=enp1s0f1
 BRIDGE_IF=br0
 VPN_IF=tun+
 
@@ -26,8 +26,6 @@ FROM_ALL_TO_ALL=""
 ALL=""
 
 MARK_MASK="0xff"
-FOR_BRIDGE="0x01/${MARK_MASK}"
-FOR_DEFAULT="0x99/${MARK_MASK}"
 FOR_ANY="0x00/${MARK_MASK}"
 
 ipt() {
@@ -321,25 +319,6 @@ dscp_tagging() {
     jump mangle POSTROUTING "$TO_VPN" "$ALL" dscp_vpn
 }
 
-split_routing() {
-    # RESTORE RULES
-    restore_mark4 PREROUTING
-    restore_mark4 OUTPUT
-
-    # OUTPUT CHAIN
-    ipt4 -t mangle -N route_output
-    mark4 route_output "$TO_LO" "$FOR_DEFAULT"
-    mark4 route_output "-m owner --uid-owner debian-transmission" "$FOR_DEFAULT"
-    mark4 route_output "$TO_ALL" "$FOR_BRIDGE"
-    save_mark4 route_output
-
-    # OUTPUT RULE
-    jump4 mangle OUTPUT "$TO_ALL" "-m mark --mark $FOR_ANY" route_output
-
-    # MASQUERADE
-    masquerade4 "$TO_BRIDGE" "-m mark --mark $FOR_BRIDGE"
-}
-
 policies
 flush_firewall
 chain_general_tracking
@@ -347,4 +326,3 @@ chain_icmp
 policies
 firewall
 dscp_tagging
-split_routing
