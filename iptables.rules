@@ -247,7 +247,7 @@ firewall() {
     drop input_wan
 
     ipt -t filter -N input_lan
-    allow input_lan "$FROM_ALL" "$ALL"
+    allow input_lan
 
     ipt -t filter -N input_vpn
     jump4 filter input_vpn "$FROM_ALL" "-p icmp" icmp
@@ -255,18 +255,18 @@ firewall() {
     drop input_vpn
 
     ipt -t filter -N input_lo
-    allow input_lo "$FROM_ALL" "$ALL"
+    allow input_lo
 
     # OUTPUT CHAINS
     ipt -t filter -N output_bridge
-    reject output_bridge "$TO_ALL" "-m owner --uid-owner debian-transmission"
-    allow output_bridge "$TO_ALL" "$ALL"
+    reject output_bridge "$TO_ALL" "-m owner --uid-owner torrent"
+    allow output_bridge
 
     ipt -t filter -N output_vpn
-    allow output_vpn "$TO_ALL" "$ALL"
+    allow output_vpn
 
     ipt -t filter -N output_lo
-    allow output_lo "$TO_ALL" "$ALL"
+    allow output_lo
 
     # FORWARD CHAINS
     ipt -t filter -N forward_wan_to_lan
@@ -277,7 +277,7 @@ firewall() {
     drop forward_wan_to_lan
 
     ipt -t filter -N forward_lan_to_wan
-    allow forward_lan_to_wan "$FROM_ALL" "$ALL"
+    allow forward_lan_to_wan
 
     # INPUT RULES
     jump filter INPUT "$FROM_ALL" "$ALL" general_tracking
@@ -306,12 +306,12 @@ dscp_tagging() {
     ipt -t mangle -N dscp_bridge
     dscp dscp_bridge "$TO_ALL" "-p udp --dport domain" 0x04
     dscp dscp_bridge "$TO_ALL" "-p tcp --dport ssh" 0x04
-    skip_dscp dscp_bridge "$ALL"
+    skip_dscp dscp_bridge
 
     ipt -t mangle -N dscp_vpn
     dscp dscp_vpn "$TO_ALL" "-p icmp" 0x01
     dscp dscp_vpn "$TO_ALL" "$ALL" 0x08
-    skip_dscp dscp_vpn "$ALL"
+    skip_dscp dscp_vpn
 
     # DSCP RULES
     skip_dscp POSTROUTING "-m dscp ! --dscp 0x00"
