@@ -7,9 +7,9 @@ UPLINK=12000 # in kbps
 TC=tc-adv
 IP=ip
 PACKET_SIZE=1514 # in bytes
-BQL=$(( 20 * ${PACKET_SIZE} )) # in bytes
-ECAKE_OPTS="internet diffserv-llt dual-srchost"
-ICAKE_OPTS="internet besteffort dual-dsthost"
+BQL=$(( 50 * ${PACKET_SIZE} )) # in bytes
+ECAKE_OPTS="rtt 5ms diffserv-llt dual-srchost"
+ICAKE_OPTS="rtt 5ms besteffort dual-dsthost"
 
 flush_qdisc() {
     $TC qdisc del dev ${IF} root 2> /dev/null
@@ -20,13 +20,11 @@ flush_qdisc() {
 }
 
 eth_setup() {
-    # turn offloads off.
     ethtool -K ${IF} gso on 2> /dev/null
     ethtool -K ${IF} tso on 2> /dev/null
     ethtool -K ${IF} ufo on 2> /dev/null
     ethtool -K ${IF} gro on 2> /dev/null
 
-    # setup BQL.
     if [ -e /sys/class/net/${IF}/queues/tx-0/byte_queue_limits ]
     then
         for i in /sys/class/net/${IF}/queues/tx-*/byte_queue_limits
