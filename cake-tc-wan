@@ -8,8 +8,8 @@ TC=tc-adv
 IP=ip
 PACKET_SIZE=1514 # in bytes
 BQL=$(( 50 * ${PACKET_SIZE} )) # in bytes
-ECAKE_OPTS="rtt 5ms diffserv-llt dual-srchost"
-ICAKE_OPTS="rtt 5ms besteffort dual-dsthost"
+ECAKE_OPTS=""
+ICAKE_OPTS="besteffort"
 
 flush_qdisc() {
     $TC qdisc del dev ${IF} root 2> /dev/null
