@@ -7,7 +7,7 @@ UPLINK=12000 # in kbps
 TC=tc-adv
 IP=ip
 PACKET_SIZE=1514 # in bytes
-BQL=$(( 50 * ${PACKET_SIZE} )) # in bytes
+BQL=$(( 10 * ${PACKET_SIZE} )) # in bytes
 ECAKE_OPTS=""
 ICAKE_OPTS="besteffort"
 
