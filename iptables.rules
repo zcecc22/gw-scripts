@@ -5,14 +5,12 @@ WAN_IF=enp1s0f1
 BRIDGE_IF=br0
 VPN_IF=tun+
 
-FROM_ALL=""
 FROM_BRIDGE="-i ${BRIDGE_IF}"
 FROM_WAN="${FROM_BRIDGE} -m physdev --physdev-in ${WAN_IF}"
 FROM_LAN="${FROM_BRIDGE} -m physdev --physdev-in ${LAN_IF}"
 FROM_VPN="-i ${VPN_IF}"
 FROM_LO="-i lo"
 
-TO_ALL=""
 TO_BRIDGE="-o ${BRIDGE_IF}"
 TO_WAN="${TO_BRIDGE} -m physdev --physdev-out ${WAN_IF}"
 TO_LAN="${TO_BRIDGE} -m physdev --physdev-out ${LAN_IF}"
@@ -21,12 +19,6 @@ TO_LO="-o lo"
 
 FROM_WAN_TO_LAN="${FROM_WAN} ${TO_LAN}"
 FROM_LAN_TO_WAN="${FROM_LAN} ${TO_WAN}"
-FROM_ALL_TO_ALL=""
-
-ALL=""
-
-MARK_MASK="0xff"
-FOR_ANY="0x00/${MARK_MASK}"
 
 ipt() {
     iptables $* 2>&1
@@ -60,9 +52,9 @@ policies() {
 
 chain_general_tracking() {
     ipt -t filter -N general_tracking
-    drop4 general_tracking "$FROM_ALL" "-f"
-    allow general_tracking "$FROM_ALL" "-m conntrack --ctstate RELATED,ESTABLISHED"
-    drop general_tracking "$FROM_ALL" "-m conntrack --ctstate INVALID"
+    drop4 general_tracking "-f"
+    allow general_tracking "-m conntrack --ctstate RELATED,ESTABLISHED"
+    drop general_tracking "-m conntrack --ctstate INVALID"
 }
 
 chain_icmp() {
@@ -99,7 +91,7 @@ chain_icmp() {
 }
 
 jump() {
-    ipt -t ${1:+"$1"} -A ${2:+"$2"} ${3:+"$3"} ${4:+"$4"} -j ${5:+"$5"}
+    ipt -t ${1:+"$1"} -A ${2:+"$2"} ${4:+"$4"} ${5:+"$5"} -j ${3:+"$3"}
 }
 
 allow() {
@@ -115,7 +107,7 @@ drop() {
 }
 
 jump4() {
-    ipt4 -t ${1:+"$1"} -A ${2:+"$2"} ${3:+"$3"} ${4:+"$4"} -j ${5:+"$5"}
+    ipt4 -t ${1:+"$1"} -A ${2:+"$2"} ${4:+"$4"} ${5:+"$5"} -j ${3:+"$3"}
 }
 
 allow4() {
@@ -131,7 +123,7 @@ drop4() {
 }
 
 jump6() {
-    ipt6 -t ${1:+"$1"} -A ${2:+"$2"} ${3:+"$3"} ${4:+"$4"} -j ${5:+"$5"}
+    ipt6 -t ${1:+"$1"} -A ${2:+"$2"} ${4:+"$4"} ${5:+"$5"} -j ${3:+"$3"}
 }
 
 allow6() {
@@ -147,18 +139,18 @@ drop6() {
 }
 
 dscp() {
-    ipt -t mangle -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -m dscp --dscp 0x00 \
-      -j DSCP --set-dscp ${4:+"$4"}
+    ipt -t mangle -A ${1:+"$1"} ${3:+"$3"} ${4:+"$4"} -m dscp --dscp 0x00 \
+      -j DSCP --set-dscp ${2:+"$2"}
 }
 
 dscp4() {
-    ipt4 -t mangle -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -m dscp --dscp 0x00 \
-      -j DSCP --set-dscp ${4:+"$4"}
+    ipt4 -t mangle -A ${1:+"$1"} ${3:+"$3"} ${4:+"$4"} -m dscp --dscp 0x00 \
+      -j DSCP --set-dscp ${2:+"$2"}
 }
 
 dscp6() {
-    ipt6 -t mangle -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -m dscp --dscp 0x00 \
-      -j DSCP --set-dscp ${4:+"$4"}
+    ipt6 -t mangle -A ${1:+"$1"} ${3:+"$3"} ${4:+"$4"} -m dscp --dscp 0x00 \
+      -j DSCP --set-dscp ${2:+"$2"}
 }
 
 skip_dscp() {
@@ -173,85 +165,22 @@ skip_dscp6() {
     ipt6 -t mangle -A ${1:+"$1"} ${2:+"$2"} -j ACCEPT
 }
 
-mark() {
-    ipt -t mangle -A ${1:+"$1"} ${2:+"$2"} -m mark --mark "$FOR_ANY" \
-      -j MARK --set-mark ${3:+"$3"}
-}
-
-mark4() {
-    ipt4 -t mangle -A ${1:+"$1"} ${2:+"$2"} -m mark --mark "$FOR_ANY" \
-      -j MARK --set-mark ${3:+"$3"}
-}
-
-mark6() {
-    ipt6 -t mangle -A ${1:+"$1"} ${2:+"$2"} -m mark --mark "$FOR_ANY" \
-      -j MARK --set-mark ${3:+"$3"}
-}
-
-skip_mark() {
-    ipt -t mangle -A ${1:+"$1"} ${2:+"$2"} -j ACCEPT
-}
-
-skip_mark4() {
-    ipt4 -t mangle -A ${1:+"$1"} ${2:+"$2"} -j ACCEPT
-}
-
-skip_mark6() {
-    ipt6 -t mangle -A ${1:+"$1"} ${2:+"$2"} -j ACCEPT
-}
-
-save_mark() {
-    ipt -t mangle -A ${1:+"$1"} -j CONNMARK --save-mark --mask "$MARK_MASK"
-}
-
-save_mark4() {
-    ipt4 -t mangle -A ${1:+"$1"} -j CONNMARK --save-mark --mask "$MARK_MASK"
-}
-
-save_mark6() {
-    ipt6 -t mangle -A ${1:+"$1"} -j CONNMARK --save-mark --mask "$MARK_MASK"
-}
-
-restore_mark() {
-    ipt -t mangle -A ${1:+"$1"} -j CONNMARK --restore-mark --mask "$MARK_MASK"
-}
-
-restore_mark4() {
-    ipt4 -t mangle -A ${1:+"$1"} -j CONNMARK --restore-mark --mask "$MARK_MASK"
-}
-
-restore_mark6() {
-    ipt6 -t mangle -A ${1:+"$1"} -j CONNMARK --restore-mark --mask "$MARK_MASK"
-}
-
-masquerade() {
-    ipt -t nat -A POSTROUTING ${1:+"$1"} ${2:+"$2"} -j MASQUERADE
-}
-
-masquerade4() {
-    ipt4 -t nat -A POSTROUTING ${1:+"$1"} ${2:+"$2"} -j MASQUERADE
-}
-
-masquerade6() {
-    ipt6 -t nat -A POSTROUTING ${1:+"$1"} ${2:+"$2"} -j MASQUERADE
-}
-
 firewall() {
     # INPUT CHAINS
     ipt -t filter -N input_wan
-    jump4 filter input_wan "$FROM_ALL" "-p icmp" icmp
-    jump6 filter input_wan "$FROM_ALL" "-p icmpv6" icmp
-    allow4 input_wan "$FROM_ALL" "-p udp -m udp --dport 68"
-    allow6 input_wan "$FROM_ALL" "-s fe80::/10 -d fe80::/10 -p udp -m udp --sport 547 --dport 546"
-    allow input_wan "$FROM_ALL" "-p tcp -m multiport --dports ssh,http,https"
+    jump4 filter input_wan icmp "-p icmp"
+    jump6 filter input_wan icmp "-p icmpv6"
+    allow4 input_wan "-p udp -m udp --dport 68"
+    allow6 input_wan "-s fe80::/10 -d fe80::/10 -p udp -m udp --sport 547 --dport 546"
+    allow input_wan "-p tcp -m multiport --dports ssh,http,https"
     drop input_wan
 
     ipt -t filter -N input_lan
     allow input_lan
 
     ipt -t filter -N input_vpn
-    jump4 filter input_vpn "$FROM_ALL" "-p icmp" icmp
-    jump6 filter input_vpn "$FROM_ALL" "-p icmpv6" icmp
+    jump4 filter input_vpn icmp "-p icmp"
+    jump6 filter input_vpn icmp "-p icmpv6"
     drop input_vpn
 
     ipt -t filter -N input_lo
@@ -259,7 +188,7 @@ firewall() {
 
     # OUTPUT CHAINS
     ipt -t filter -N output_bridge
-    reject output_bridge "$TO_ALL" "-m owner --uid-owner torrent"
+    reject output_bridge "-m owner --uid-owner torrent"
     allow output_bridge
 
     ipt -t filter -N output_vpn
@@ -270,53 +199,53 @@ firewall() {
 
     # FORWARD CHAINS
     ipt -t filter -N forward_wan_to_lan
-    jump4 filter forward_wan_to_lan "$FROM_ALL" "-p icmp" icmp
-    jump6 filter forward_wan_to_lan "$FROM_ALL" "-p icmpv6" icmp
-    allow4 forward_wan_to_lan "$FROM_ALL" "-p udp -m udp --dport 68"
-    allow6 forward_wan_to_lan "$FROM_ALL" "-s fe80::/10 -d fe80::/10 -p udp -m udp --sport 547 --dport 546"
+    jump4 filter forward_wan_to_lan icmp "-p icmp"
+    jump6 filter forward_wan_to_lan icmp "-p icmpv6"
+    allow4 forward_wan_to_lan "-p udp -m udp --dport 68"
+    allow6 forward_wan_to_lan "-s fe80::/10 -d fe80::/10 -p udp -m udp --sport 547 --dport 546"
     drop forward_wan_to_lan
 
     ipt -t filter -N forward_lan_to_wan
     allow forward_lan_to_wan
 
     # INPUT RULES
-    jump filter INPUT "$FROM_ALL" "$ALL" general_tracking
-    jump filter INPUT "$FROM_WAN" "$ALL" input_wan
-    jump filter INPUT "$FROM_LAN" "$ALL" input_lan
-    jump filter INPUT "$FROM_VPN" "$ALL" input_vpn
-    jump filter INPUT "$FROM_LO" "$ALL" input_lo
+    jump filter INPUT general_tracking
+    jump filter INPUT input_wan "$FROM_WAN"
+    jump filter INPUT input_lan "$FROM_LAN"
+    jump filter INPUT input_vpn "$FROM_VPN"
+    jump filter INPUT input_lo "$FROM_LO"
     drop INPUT
 
     # OUTPUT RULES
-    jump filter OUTPUT "$TO_ALL" "$ALL" general_tracking
-    jump filter OUTPUT "$TO_BRIDGE" "$ALL" output_bridge
-    jump filter OUTPUT "$TO_VPN" "$ALL" output_vpn
-    jump filter OUTPUT "$TO_LO" "$ALL" output_lo
+    jump filter OUTPUT general_tracking
+    jump filter OUTPUT output_bridge "$TO_BRIDGE"
+    jump filter OUTPUT output_vpn "$TO_VPN"
+    jump filter OUTPUT output_lo "$TO_LO"
     reject OUTPUT
 
     # FORWARD RULES
-    jump filter FORWARD "$FROM_ALL_TO_ALL" "$ALL" general_tracking
-    jump filter FORWARD "$FROM_WAN_TO_LAN" "$ALL" forward_wan_to_lan
-    jump filter FORWARD "$FROM_LAN_TO_WAN" "$ALL" forward_lan_to_wan
+    jump filter FORWARD general_tracking
+    jump filter FORWARD forward_wan_to_lan "$FROM_WAN_TO_LAN"
+    jump filter FORWARD forward_lan_to_wan "$FROM_LAN_TO_WAN"
     drop FORWARD
 }
 
 dscp_tagging() {
     # DSCP CHAINS
     ipt -t mangle -N dscp_bridge
-    dscp dscp_bridge "$TO_ALL" "-p udp --dport domain" 0x04
-    dscp dscp_bridge "$TO_ALL" "-p tcp --dport ssh" 0x04
+    dscp dscp_bridge 0x04 "-p udp --dport domain"
+    dscp dscp_bridge 0x04 "-p tcp --dport ssh"
     skip_dscp dscp_bridge
 
     ipt -t mangle -N dscp_vpn
-    dscp dscp_vpn "$TO_ALL" "-p icmp" 0x01
-    dscp dscp_vpn "$TO_ALL" "$ALL" 0x08
+    dscp dscp_vpn 0x01 "-p icmp"
+    dscp dscp_vpn 0x08
     skip_dscp dscp_vpn
 
     # DSCP RULES
     skip_dscp POSTROUTING "-m dscp ! --dscp 0x00"
-    jump mangle POSTROUTING "$TO_BRIDGE" "$ALL" dscp_bridge
-    jump mangle POSTROUTING "$TO_VPN" "$ALL" dscp_vpn
+    jump mangle POSTROUTING dscp_bridge "$TO_BRIDGE"
+    jump mangle POSTROUTING dscp_vpn "$TO_VPN"
 }
 
 policies
