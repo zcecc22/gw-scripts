@@ -1,0 +1,256 @@
+#!/bin/sh
+
+LAN_IF=enp1s0f0
+WAN_IF=enp1s0f1
+VPN_IF=tun+
+
+FROM_WAN="-i ${WAN_IF}"
+FROM_LAN="-i ${LAN_IF}"
+FROM_VPN="-i ${VPN_IF}"
+FROM_LO="-i lo"
+
+TO_WAN="-o ${WAN_IF}"
+TO_LAN="-o ${LAN_IF}"
+TO_VPN="-o ${VPN_IF}"
+TO_LO="-o lo"
+
+FROM_WAN_TO_LAN="${FROM_WAN} ${TO_LAN}"
+FROM_LAN_TO_WAN="${FROM_LAN} ${TO_WAN}"
+
+ipt() {
+    iptables $* 2>&1
+    ip6tables $* 2>&1
+}
+
+ipt4() {
+    iptables $* 2>&1
+}
+
+ipt6() {
+    ip6tables $* 2>&1
+}
+
+flush_firewall() {
+    ipt -t raw -F
+    ipt -t raw -X
+    ipt -t filter -F
+    ipt -t filter -X
+    ipt -t mangle -F
+    ipt -t mangle -X
+    ipt -t nat -F
+    ipt -t nat -X
+}
+
+policies() {
+    ipt -t filter -P INPUT ACCEPT
+    ipt -t filter -P OUTPUT ACCEPT
+    ipt -t filter -P FORWARD ACCEPT
+}
+
+chain_general_tracking() {
+    ipt -t filter -N general_tracking
+    drop4 general_tracking "-f"
+    allow general_tracking "-m conntrack --ctstate RELATED,ESTABLISHED"
+    drop general_tracking "-m conntrack --ctstate INVALID"
+}
+
+chain_icmp() {
+    ipt -t filter -N icmp
+
+    allow4 icmp "-p icmp --icmp-type 0"
+    allow4 icmp "-p icmp --icmp-type 3"
+    allow4 icmp "-p icmp --icmp-type 8"
+    allow4 icmp "-p icmp --icmp-type 11"
+    drop4 icmp
+
+    allow6 icmp "-p icmpv6 --icmpv6-type 1"
+    allow6 icmp "-p icmpv6 --icmpv6-type 2"
+    allow6 icmp "-p icmpv6 --icmpv6-type 3"
+    allow6 icmp "-p icmpv6 --icmpv6-type 4"
+    allow6 icmp "-p icmpv6 --icmpv6-type 128"
+    allow6 icmp "-p icmpv6 --icmpv6-type 133"
+    allow6 icmp "-p icmpv6 --icmpv6-type 134"
+    allow6 icmp "-p icmpv6 --icmpv6-type 135"
+    allow6 icmp "-p icmpv6 --icmpv6-type 136"
+    allow6 icmp "-p icmpv6 --icmpv6-type 137"
+    allow6 icmp "-p icmpv6 --icmpv6-type 141"
+    allow6 icmp "-p icmpv6 --icmpv6-type 142"
+    allow6 icmp "-s fe80::/10 -p icmpv6 --icmpv6-type 130"
+    allow6 icmp "-s fe80::/10 -p icmpv6 --icmpv6-type 131"
+    allow6 icmp "-s fe80::/10 -p icmpv6 --icmpv6-type 132"
+    allow6 icmp "-s fe80::/10 -p icmpv6 --icmpv6-type 143"
+    allow6 icmp "-p icmpv6 --icmpv6-type 148"
+    allow6 icmp "-p icmpv6 --icmpv6-type 149"
+    allow6 icmp "-s fe80::/10 -p icmpv6 --icmpv6-type 151"
+    allow6 icmp "-s fe80::/10 -p icmpv6 --icmpv6-type 152"
+    allow6 icmp "-s fe80::/10 -p icmpv6 --icmpv6-type 153"
+    drop6 icmp
+}
+
+jump() {
+    ipt -t ${1:+"$1"} -A ${2:+"$2"} ${4:+"$4"} ${5:+"$5"} -j ${3:+"$3"}
+}
+
+allow() {
+    ipt -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j ACCEPT
+}
+
+reject() {
+    ipt -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j REJECT
+}
+
+drop() {
+    ipt -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j DROP
+}
+
+jump4() {
+    ipt4 -t ${1:+"$1"} -A ${2:+"$2"} ${4:+"$4"} ${5:+"$5"} -j ${3:+"$3"}
+}
+
+allow4() {
+    ipt4 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j ACCEPT
+}
+
+reject4() {
+    ipt4 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j REJECT
+}
+
+drop4() {
+    ipt4 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j DROP
+}
+
+jump6() {
+    ipt6 -t ${1:+"$1"} -A ${2:+"$2"} ${4:+"$4"} ${5:+"$5"} -j ${3:+"$3"}
+}
+
+allow6() {
+    ipt6 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j ACCEPT
+}
+
+reject6() {
+    ipt6 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j REJECT
+}
+
+drop6() {
+    ipt6 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j DROP
+}
+
+dscp() {
+    ipt -t mangle -A ${1:+"$1"} ${3:+"$3"} ${4:+"$4"} -m dscp --dscp 0x00 \
+      -j DSCP --set-dscp ${2:+"$2"}
+}
+
+dscp4() {
+    ipt4 -t mangle -A ${1:+"$1"} ${3:+"$3"} ${4:+"$4"} -m dscp --dscp 0x00 \
+      -j DSCP --set-dscp ${2:+"$2"}
+}
+
+dscp6() {
+    ipt6 -t mangle -A ${1:+"$1"} ${3:+"$3"} ${4:+"$4"} -m dscp --dscp 0x00 \
+      -j DSCP --set-dscp ${2:+"$2"}
+}
+
+skip_dscp() {
+    ipt -t mangle -A ${1:+"$1"} ${2:+"$2"} -j ACCEPT
+}
+
+skip_dscp4() {
+    ipt4 -t mangle -A ${1:+"$1"} ${2:+"$2"} -j ACCEPT
+}
+
+skip_dscp6() {
+    ipt6 -t mangle -A ${1:+"$1"} ${2:+"$2"} -j ACCEPT
+}
+
+firewall() {
+    # INPUT CHAINS
+    ipt -t filter -N input_wan
+    jump4 filter input_wan icmp "-p icmp"
+    jump6 filter input_wan icmp "-p icmpv6"
+    allow4 input_wan "-p udp -m udp --dport 68"
+    allow6 input_wan "-s fe80::/10 -d fe80::/10 -p udp -m udp --sport 547 --dport 546"
+    allow input_wan "-p tcp -m multiport --dports ssh,http,https"
+    drop input_wan
+
+    ipt -t filter -N input_lan
+    allow input_lan
+
+    ipt -t filter -N input_vpn
+    jump4 filter input_vpn icmp "-p icmp"
+    jump6 filter input_vpn icmp "-p icmpv6"
+    drop input_vpn
+
+    ipt -t filter -N input_lo
+    allow input_lo
+
+    # OUTPUT CHAINS
+    ipt -t filter -N output_wan
+    reject output_wan "-m owner --uid-owner torrent"
+    allow output_wan
+
+    ipt -t filter -N output_lan
+    allow output_lan
+
+    ipt -t filter -N output_vpn
+    allow output_vpn
+
+    ipt -t filter -N output_lo
+    allow output_lo
+
+    # FORWARD CHAINS
+    ipt -t filter -N forward_wan_to_lan
+    jump4 filter forward_wan_to_lan icmp "-p icmp"
+    jump6 filter forward_wan_to_lan icmp "-p icmpv6"
+    drop forward_wan_to_lan
+
+    ipt -t filter -N forward_lan_to_wan
+    allow forward_lan_to_wan
+
+    # INPUT RULES
+    jump filter INPUT general_tracking
+    jump filter INPUT input_wan "$FROM_WAN"
+    jump filter INPUT input_lan "$FROM_LAN"
+    jump filter INPUT input_vpn "$FROM_VPN"
+    jump filter INPUT input_lo "$FROM_LO"
+    drop INPUT
+
+    # OUTPUT RULES
+    jump filter OUTPUT general_tracking
+    jump filter OUTPUT output_wan "$TO_WAN"
+    jump filter OUTPUT output_lan "$TO_LAN"
+    jump filter OUTPUT output_vpn "$TO_VPN"
+    jump filter OUTPUT output_lo "$TO_LO"
+    reject OUTPUT
+
+    # FORWARD RULES
+    jump filter FORWARD general_tracking
+    jump filter FORWARD forward_wan_to_lan "$FROM_WAN_TO_LAN"
+    jump filter FORWARD forward_lan_to_wan "$FROM_LAN_TO_WAN"
+    drop FORWARD
+}
+
+dscp_tagging() {
+    # DSCP CHAINS
+    ipt -t mangle -N dscp_wan
+    dscp dscp_wan 0x04 "-p udp --dport domain"
+    dscp dscp_wan 0x04 "-p tcp --dport ssh"
+    skip_dscp dscp_wan
+
+    ipt -t mangle -N dscp_vpn
+    dscp dscp_vpn 0x01 "-p icmp"
+    dscp dscp_vpn 0x08
+    skip_dscp dscp_vpn
+
+    # DSCP RULES
+    skip_dscp POSTROUTING "-m dscp ! --dscp 0x00"
+    jump mangle POSTROUTING dscp_wan "$TO_WAN"
+    jump mangle POSTROUTING dscp_vpn "$TO_VPN"
+}
+
+policies
+flush_firewall
+chain_general_tracking
+chain_icmp
+policies
+firewall
+dscp_tagging
