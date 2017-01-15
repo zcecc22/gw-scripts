@@ -252,6 +252,5 @@ policies
 flush_firewall
 chain_general_tracking
 chain_icmp
-policies
 firewall
 dscp_tagging
