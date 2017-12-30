@@ -5,27 +5,32 @@ WAN_IF=eth0
 LAN_IF=eth1
 WLAN_IF=wlan+
 VPN_IF=tun+
+LO=lo
 
 FROM_BRIDGE="-i ${BRIDGE_IF}"
 FROM_WAN="${FROM_BRIDGE} -m physdev --physdev-in ${WAN_IF}"
 FROM_LAN="${FROM_BRIDGE} -m physdev --physdev-in ${LAN_IF}"
 FROM_WLAN="${FROM_BRIDGE} -m physdev --physdev-in ${WLAN_IF}"
 FROM_VPN="-i ${VPN_IF}"
-FROM_LO="-i lo"
+FROM_LO="-i ${LO}"
 
 TO_BRIDGE="-o ${BRIDGE_IF}"
 TO_WAN="${TO_BRIDGE} -m physdev --physdev-out ${WAN_IF}"
 TO_LAN="${TO_BRIDGE} -m physdev --physdev-out ${LAN_IF}"
 TO_WLAN="${TO_BRIDGE} -m physdev --physdev-out ${WLAN_IF}"
 TO_VPN="-o ${VPN_IF}"
-TO_LO="-o lo"
+TO_LO="-o ${LO}"
 
 FROM_WAN_TO_LAN="${FROM_WAN} ${TO_LAN}"
 FROM_WAN_TO_WLAN="${FROM_WAN} ${TO_WLAN}"
+
 FROM_LAN_TO_WAN="${FROM_LAN} ${TO_WAN}"
+FROM_LAN_TO_LAN="${FROM_LAN} ${TO_LAN}"
 FROM_LAN_TO_WLAN="${FROM_LAN} ${TO_WLAN}"
+
 FROM_WLAN_TO_WAN="${FROM_WLAN} ${TO_WAN}"
 FROM_WLAN_TO_LAN="${FROM_WLAN} ${TO_LAN}"
+FROM_WLAN_TO_WLAN="${FROM_WLAN} ${TO_WLAN}"
 
 ipt() {
     iptables $* 2>&1
@@ -57,7 +62,6 @@ policies() {
 
 chain_general_tracking() {
     ipt -t filter -N general_tracking
-    drop4 general_tracking "-f"
     allow general_tracking "-m conntrack --ctstate RELATED,ESTABLISHED"
     drop general_tracking "-m conntrack --ctstate INVALID"
 }
@@ -194,17 +198,11 @@ firewall() {
     allow6 forward_wan_to_wlan "-s fe80::/10 -d fe80::/10 -p udp -m udp --sport 547 --dport 546"
     drop forward_wan_to_wlan
 
-    ipt -t filter -N forward_lan_to_wan
-    allow forward_lan_to_wan
+    ipt -t filter -N forward_lan
+    allow forward_lan
 
-    ipt -t filter -N forward_lan_to_wlan
-    allow forward_lan_to_wlan
-
-    ipt -t filter -N forward_wlan_to_wan
-    allow forward_wlan_to_wan
-
-    ipt -t filter -N forward_wlan_to_lan
-    allow forward_wlan_to_lan
+    ipt -t filter -N forward_wlan
+    allow forward_wlan
 
     # INPUT RULES
     jump filter INPUT general_tracking
@@ -226,10 +224,8 @@ firewall() {
     jump filter FORWARD general_tracking
     jump filter FORWARD forward_wan_to_lan "$FROM_WAN_TO_LAN"
     jump filter FORWARD forward_wan_to_wlan "$FROM_WAN_TO_WLAN"
-    jump filter FORWARD forward_lan_to_wan "$FROM_LAN_TO_WAN"
-    jump filter FORWARD forward_lan_to_wlan "$FROM_LAN_TO_WLAN"
-    jump filter FORWARD forward_wlan_to_wan "$FROM_WLAN_TO_WAN"
-    jump filter FORWARD forward_wlan_to_lan "$FROM_WLAN_TO_LAN"
+    jump filter FORWARD forward_lan "$FROM_LAN"
+    jump filter FORWARD forward_wlan "$FROM_WLAN"
     drop FORWARD
 }
 
