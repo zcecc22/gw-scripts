@@ -1,0 +1,60 @@
+#!/bin/sh
+
+IF=eth0
+DEV=eth0i
+DOWNLINK=200000 # in kbps
+UPLINK=12000 # in kbps
+TC=tc
+IP=ip
+PACKET_SIZE=1514 # in bytes
+BQL=$(( 10 * ${PACKET_SIZE} )) # in bytes
+ECAKE_OPTS=""
+ICAKE_OPTS="besteffort ingress"
+
+flush_qdisc() {
+    $TC qdisc del dev ${IF} root 2> /dev/null
+    $TC qdisc del dev ${IF} handle ffff: ingress 2> /dev/null
+    $TC qdisc del dev ${DEV} root 2> /dev/null
+    $IP link set dev ${DEV} down 2> /dev/null
+    $IP link delete ${DEV} type ifb 2> /dev/null
+}
+
+eth_setup() {
+    ethtool -K ${IF} gso on 2> /dev/null
+    ethtool -K ${IF} tso on 2> /dev/null
+    ethtool -K ${IF} ufo on 2> /dev/null
+    ethtool -K ${IF} gro on 2> /dev/null
+
+    if [ -e /sys/class/net/${IF}/queues/tx-0/byte_queue_limits ]
+    then
+        for i in /sys/class/net/${IF}/queues/tx-*/byte_queue_limits
+        do
+            echo ${BQL} > $i/limit_max
+        done
+    fi
+}
+
+egress_qdisc() {
+    $TC qdisc del dev ${IF} root 2> /dev/null
+    $TC qdisc add dev ${IF} root cake bandwidth ${UPLINK}kbit ${ECAKE_OPTS}
+}
+
+ingress_qdisc() {
+    $TC qdisc del dev ${IF} handle ffff: ingress 2> /dev/null
+    $TC qdisc add dev ${IF} handle ffff: ingress
+
+    $IP link add name ${DEV} type ifb
+
+    $TC qdisc del dev ${DEV} root 2> /dev/null
+    $TC qdisc add dev ${DEV} root cake bandwidth ${DOWNLINK}kbit ${ICAKE_OPTS}
+
+    $IP link set dev ${DEV} up
+
+    $TC filter add dev ${IF} parent ffff: protocol all prio 1 u32 \
+    match u32 0 0 action mirred egress redirect dev ${DEV}
+}
+
+flush_qdisc
+eth_setup
+egress_qdisc
+ingress_qdisc
