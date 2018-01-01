@@ -108,10 +108,12 @@ allow() {
 }
 
 reject() {
+    ipt -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j LOG --log-prefix "REJECT:"${1:+"$1"}":"
     ipt -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j REJECT
 }
 
 drop() {
+    ipt -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j LOG --log-prefix "DROP:"${1:+"$1"}":"
     ipt -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j DROP
 }
 
@@ -124,10 +126,12 @@ allow4() {
 }
 
 reject4() {
+    ipt4 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j LOG --log-prefix "REJECT:"${1:+"$1"}":"
     ipt4 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j REJECT
 }
 
 drop4() {
+    ipt4 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j LOG --log-prefix "DROP:"${1:+"$1"}":"
     ipt4 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j DROP
 }
 
@@ -140,10 +144,12 @@ allow6() {
 }
 
 reject6() {
+    ipt6 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j LOG --log-prefix "REJECT:"${1:+"$1"}":"
     ipt6 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j REJECT
 }
 
 drop6() {
+    ipt6 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j LOG --log-prefix "DROP:"${1:+"$1"}":"
     ipt6 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j DROP
 }
 
@@ -154,6 +160,9 @@ firewall() {
     jump6 filter input_wan icmp "-p icmpv6"
     allow4 input_wan "-p udp -m udp --dport 68"
     allow6 input_wan "-s fe80::/10 -d fe80::/10 -p udp -m udp --sport 547 --dport 546"
+    allow input_wan "-m pkttype --pkt-type MULTICAST"
+    allow4 input_wan "-m pkttype --pkt-type BROADCAST"
+    allow input_wan "-p udp --sport 1900"
     allow input_wan "-p tcp -m multiport --dports ssh,http,https"
     drop input_wan
 
@@ -189,6 +198,9 @@ firewall() {
     jump6 filter forward_wan_to_lan icmp "-p icmpv6"
     allow4 forward_wan_to_lan "-p udp -m udp --dport 68"
     allow6 forward_wan_to_lan "-s fe80::/10 -d fe80::/10 -p udp -m udp --sport 547 --dport 546"
+    allow forward_wan_to_lan "-m pkttype --pkt-type MULTICAST"
+    allow4 forward_wan_to_lan "-m pkttype --pkt-type BROADCAST"
+    allow forward_wan_to_lan "-p udp --sport 1900"
     drop forward_wan_to_lan
 
     ipt -t filter -N forward_wan_to_wlan
@@ -196,6 +208,9 @@ firewall() {
     jump6 filter forward_wan_to_wlan icmp "-p icmpv6"
     allow4 forward_wan_to_wlan "-p udp -m udp --dport 68"
     allow6 forward_wan_to_wlan "-s fe80::/10 -d fe80::/10 -p udp -m udp --sport 547 --dport 546"
+    allow forward_wan_to_wlan "-m pkttype --pkt-type MULTICAST"
+    allow4 forward_wan_to_wlan "-m pkttype --pkt-type BROADCAST"
+    allow forward_wan_to_wlan "-p udp --sport 1900"
     drop forward_wan_to_wlan
 
     ipt -t filter -N forward_lan

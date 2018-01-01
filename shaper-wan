@@ -2,14 +2,12 @@
 
 IF=eth0
 DEV=eth0i
-DOWNLINK=200000 # in kbps
-UPLINK=12000 # in kbps
 TC=tc
 IP=ip
 PACKET_SIZE=1514 # in bytes
 BQL=$(( 10 * ${PACKET_SIZE} )) # in bytes
-ECAKE_OPTS="rtt 50ms"
-ICAKE_OPTS="rtt 50ms besteffort ingress"
+ECAKE_OPTS="bandwidth 12mbit rtt 25ms diffserv3 dual-srchost"
+ICAKE_OPTS="bandwidth 200mbit rtt 25ms besteffort dual-dsthost"
 
 flush_qdisc() {
     ${TC} qdisc del dev ${IF} root &> /dev/null
@@ -36,7 +34,7 @@ eth_setup() {
 
 egress_qdisc() {
     ${TC} qdisc del dev ${IF} root &> /dev/null
-    ${TC} qdisc add dev ${IF} root cake bandwidth ${UPLINK}kbit ${ECAKE_OPTS}
+    ${TC} qdisc add dev ${IF} root cake ${ECAKE_OPTS}
 }
 
 ingress_qdisc() {
@@ -46,7 +44,7 @@ ingress_qdisc() {
     ${IP} link add name ${DEV} type ifb
 
     ${TC} qdisc del dev ${DEV} root &> /dev/null
-    ${TC} qdisc add dev ${DEV} root cake bandwidth ${DOWNLINK}kbit ${ICAKE_OPTS}
+    ${TC} qdisc add dev ${DEV} root cake ${ICAKE_OPTS}
 
     ${IP} link set dev ${DEV} up
 
