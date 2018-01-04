@@ -4,10 +4,10 @@ IF=eth0
 DEV=eth0i
 TC=tc
 IP=ip
-PACKET_SIZE=1514 # in bytes
-BQL=$(( 10 * ${PACKET_SIZE} )) # in bytes
-ECAKE_OPTS="bandwidth 12mbit rtt 25ms diffserv3 dual-srchost"
-ICAKE_OPTS="bandwidth 200mbit rtt 25ms besteffort dual-dsthost"
+PACKET_SIZE=1514
+BQL=$(( 100 * ${PACKET_SIZE} ))
+ECAKE_OPTS="bandwidth 12mbit rtt 50ms diffserv3 dual-srchost"
+ICAKE_OPTS="bandwidth 200mbit rtt 50ms besteffort dual-dsthost"
 
 flush_qdisc() {
     ${TC} qdisc del dev ${IF} root &> /dev/null
