@@ -158,9 +158,9 @@ firewall() {
     ipt -t filter -N input_wan
     jump4 filter input_wan icmp "-p icmp"
     jump6 filter input_wan icmp "-p icmpv6"
+    allow input_wan "-p tcp -m tcp --dport 22"
     allow4 input_wan "-p udp -m udp --dport 68"
     allow6 input_wan "-s fe80::/10 -d fe80::/10 -p udp -m udp --sport 547 --dport 546"
-    allow input_wan "-p tcp -m multiport --dports ssh,http,https"
     drop input_wan
 
     ipt -t filter -N input_lan
@@ -172,8 +172,9 @@ firewall() {
     ipt -t filter -N input_vpn
     jump4 filter input_vpn icmp "-p icmp"
     jump6 filter input_vpn icmp "-p icmpv6"
-    allow input_vpn "-p tcp -m multiport --dports 6881:6999"
-    allow input_vpn "-p udp -m multiport --dports 6881:6999"
+    allow input_vpn "-p tcp -m tcp --dport 22"
+    allow input_vpn "-p tcp -m tcp --dport 6881:6999"
+    allow input_vpn "-p udp -m udp --dport 6881:6999"
     drop input_vpn
 
     ipt -t filter -N input_lo
