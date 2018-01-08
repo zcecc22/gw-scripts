@@ -110,12 +110,12 @@ allow() {
 }
 
 reject() {
-    [ -n ${LOG} ] && ipt -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j LOG --log-prefix "REJECT:"${1:+"$1"}":"
+    [ -n "${LOG}" ] && ipt -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j LOG --log-prefix "REJECT:"${1:+"$1"}":"
     ipt -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j REJECT
 }
 
 drop() {
-    [ -n ${LOG} ] && ipt -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j LOG --log-prefix "DROP:"${1:+"$1"}":"
+    [ -n "${LOG}" ] && ipt -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j LOG --log-prefix "DROP:"${1:+"$1"}":"
     ipt -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j DROP
 }
 
@@ -128,12 +128,12 @@ allow4() {
 }
 
 reject4() {
-    [ -n ${LOG} ] && ipt4 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j LOG --log-prefix "REJECT:"${1:+"$1"}":"
+    [ -n "${LOG}" ] && ipt4 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j LOG --log-prefix "REJECT:"${1:+"$1"}":"
     ipt4 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j REJECT
 }
 
 drop4() {
-    [ -n ${LOG} ] && ipt4 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j LOG --log-prefix "DROP:"${1:+"$1"}":"
+    [ -n "${LOG}" ] && ipt4 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j LOG --log-prefix "DROP:"${1:+"$1"}":"
     ipt4 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j DROP
 }
 
@@ -146,12 +146,12 @@ allow6() {
 }
 
 reject6() {
-    [ -n ${LOG} ] && ipt6 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j LOG --log-prefix "REJECT:"${1:+"$1"}":"
+    [ -n "${LOG}" ] && ipt6 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j LOG --log-prefix "REJECT:"${1:+"$1"}":"
     ipt6 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j REJECT
 }
 
 drop6() {
-    [ -n ${LOG} ] && ipt6 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j LOG --log-prefix "DROP:"${1:+"$1"}":"
+    [ -n "${LOG}" ] && ipt6 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j LOG --log-prefix "DROP:"${1:+"$1"}":"
     ipt6 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j DROP
 }
 
