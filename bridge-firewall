@@ -62,14 +62,18 @@ policies() {
     ipt -t filter -P FORWARD ACCEPT
 }
 
+create_chain() {
+    ipt -t filter -N ${1:+"$1"}
+}
+
 chain_general_tracking() {
-    ipt -t filter -N general_tracking
+    create_chain general_tracking
     allow general_tracking "-m conntrack --ctstate RELATED,ESTABLISHED"
     drop general_tracking "-m conntrack --ctstate INVALID"
 }
 
 chain_icmp() {
-    ipt -t filter -N icmp
+    create_chain icmp
 
     allow4 icmp "-p icmp --icmp-type 0"
     allow4 icmp "-p icmp --icmp-type 3"
@@ -102,7 +106,7 @@ chain_icmp() {
 }
 
 jump() {
-    ipt -t ${1:+"$1"} -A ${2:+"$2"} ${4:+"$4"} ${5:+"$5"} -j ${3:+"$3"}
+    ipt -t filter -A ${1:+"$1"} ${3:+"$3"} ${4:+"$4"} -j ${2:+"$2"}
 }
 
 allow() {
@@ -120,7 +124,7 @@ drop() {
 }
 
 jump4() {
-    ipt4 -t ${1:+"$1"} -A ${2:+"$2"} ${4:+"$4"} ${5:+"$5"} -j ${3:+"$3"}
+    ipt4 -t filter -A ${1:+"$1"} ${3:+"$3"} ${4:+"$4"} -j ${2:+"$2"}
 }
 
 allow4() {
@@ -138,7 +142,7 @@ drop4() {
 }
 
 jump6() {
-    ipt6 -t ${1:+"$1"} -A ${2:+"$2"} ${4:+"$4"} ${5:+"$5"} -j ${3:+"$3"}
+    ipt6 -t filter -A ${1:+"$1"} ${3:+"$3"} ${4:+"$4"} -j ${2:+"$2"}
 }
 
 allow6() {
@@ -157,84 +161,84 @@ drop6() {
 
 firewall() {
     # INPUT CHAINS
-    ipt -t filter -N input_wan
-    jump4 filter input_wan icmp "-p icmp"
-    jump6 filter input_wan icmp "-p icmpv6"
+    create_chain input_wan
+    jump4 input_wan icmp "-p icmp"
+    jump6 input_wan icmp "-p icmpv6"
     allow input_wan "-p tcp -m tcp --dport 22"
     allow4 input_wan "-p udp -m udp --dport 68"
     allow6 input_wan "-s fe80::/10 -d fe80::/10 -p udp -m udp --sport 547 --dport 546"
     drop input_wan
 
-    ipt -t filter -N input_lan
+    create_chain input_lan
     allow input_lan
 
-    ipt -t filter -N input_wlan
+    create_chain input_wlan
     allow input_wlan
 
-    ipt -t filter -N input_vpn
-    jump4 filter input_vpn icmp "-p icmp"
-    jump6 filter input_vpn icmp "-p icmpv6"
+    create_chain input_vpn
+    jump4 input_vpn icmp "-p icmp"
+    jump6 input_vpn icmp "-p icmpv6"
     allow input_vpn "-p tcp -m tcp --dport 22"
     allow input_vpn "-p tcp -m tcp --dport 6881:6999"
     allow input_vpn "-p udp -m udp --dport 6881:6999"
     drop input_vpn
 
-    ipt -t filter -N input_lo
+    create_chain input_lo
     allow input_lo
 
     # OUTPUT CHAINS
-    ipt -t filter -N output_bridge
+    create_chain output_bridge
     allow output_bridge
 
-    ipt -t filter -N output_vpn
+    create_chain output_vpn
     allow output_vpn
 
-    ipt -t filter -N output_lo
+    create_chain output_lo
     allow output_lo
 
     # FORWARD CHAINS
-    ipt -t filter -N forward_wan_to_lan
-    jump4 filter forward_wan_to_lan icmp "-p icmp"
-    jump6 filter forward_wan_to_lan icmp "-p icmpv6"
+    create_chain forward_wan_to_lan
+    jump4 forward_wan_to_lan icmp "-p icmp"
+    jump6 forward_wan_to_lan icmp "-p icmpv6"
     allow4 forward_wan_to_lan "-p udp -m udp --dport 68"
     allow6 forward_wan_to_lan "-s fe80::/10 -d fe80::/10 -p udp -m udp --sport 547 --dport 546"
     drop forward_wan_to_lan
 
-    ipt -t filter -N forward_wan_to_wlan
-    jump4 filter forward_wan_to_wlan icmp "-p icmp"
-    jump6 filter forward_wan_to_wlan icmp "-p icmpv6"
+    create_chain forward_wan_to_wlan
+    jump4 forward_wan_to_wlan icmp "-p icmp"
+    jump6 forward_wan_to_wlan icmp "-p icmpv6"
     allow4 forward_wan_to_wlan "-p udp -m udp --dport 68"
     allow6 forward_wan_to_wlan "-s fe80::/10 -d fe80::/10 -p udp -m udp --sport 547 --dport 546"
     drop forward_wan_to_wlan
 
-    ipt -t filter -N forward_lan
+    create_chain forward_lan
     allow forward_lan
 
-    ipt -t filter -N forward_wlan
+    create_chain forward_wlan
     allow forward_wlan
 
     # INPUT RULES
-    jump filter INPUT general_tracking
-    jump filter INPUT input_wan "$FROM_WAN"
-    jump filter INPUT input_lan "$FROM_LAN"
-    jump filter INPUT input_wlan "$FROM_WLAN"
-    jump filter INPUT input_vpn "$FROM_VPN"
-    jump filter INPUT input_lo "$FROM_LO"
+    jump INPUT general_tracking
+    jump INPUT input_wan "$FROM_WAN"
+    jump INPUT input_lan "$FROM_LAN"
+    jump INPUT input_wlan "$FROM_WLAN"
+    jump INPUT input_vpn "$FROM_VPN"
+    jump INPUT input_lo "$FROM_LO"
     drop INPUT
 
     # OUTPUT RULES
-    jump filter OUTPUT general_tracking
-    jump filter OUTPUT output_bridge "$TO_BRIDGE"
-    jump filter OUTPUT output_vpn "$TO_VPN"
-    jump filter OUTPUT output_lo "$TO_LO"
+    jump OUTPUT general_tracking
+    jump OUTPUT output_bridge "$TO_BRIDGE"
+    jump OUTPUT output_vpn "$TO_VPN"
+    jump OUTPUT output_lo "$TO_LO"
     reject OUTPUT
 
     # FORWARD RULES
-    jump filter FORWARD general_tracking
-    jump filter FORWARD forward_wan_to_lan "$FROM_WAN_TO_LAN"
-    jump filter FORWARD forward_wan_to_wlan "$FROM_WAN_TO_WLAN"
-    jump filter FORWARD forward_lan "$FROM_LAN"
-    jump filter FORWARD forward_wlan "$FROM_WLAN"
+    jump FORWARD general_tracking
+    jump FORWARD forward_wan_to_lan "$FROM_WAN_TO_LAN"
+    jump FORWARD forward_wan_to_wlan "$FROM_WAN_TO_WLAN"
+    jump FORWARD forward_lan "$FROM_LAN"
+    jump FORWARD forward_wlan "$FROM_WLAN"
     drop FORWARD
 }
 
