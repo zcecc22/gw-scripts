@@ -179,8 +179,6 @@ firewall() {
     jump4 input_vpn icmp "-p icmp"
     jump6 input_vpn icmp "-p icmpv6"
     allow input_vpn "-p tcp -m tcp --dport 22"
-    allow input_vpn "-p tcp -m tcp --dport 80"
-    allow input_vpn "-p tcp -m tcp --dport 443"
     allow input_vpn "-p tcp -m tcp --dport 6881:6999"
     allow input_vpn "-p udp -m udp --dport 6881:6999"
     drop input_vpn
