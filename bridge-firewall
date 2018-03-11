@@ -159,6 +159,10 @@ drop6() {
     ipt6 -t filter -A ${1:+"$1"} ${2:+"$2"} ${3:+"$3"} -j DROP
 }
 
+intercept() {
+    ipt -t nat -A PREROUTING ${1:+"$1"} ${2:+"$2"} -j REDIRECT
+}
+
 firewall() {
     # INPUT CHAINS
     create_chain input_wan
@@ -240,6 +244,10 @@ firewall() {
     jump FORWARD forward_lan "$FROM_LAN"
     jump FORWARD forward_wlan "$FROM_WLAN"
     drop FORWARD
+
+    # INTERCEPT RULES
+    intercept "$FROM_LAN" "-p udp --dport 53"
+    intercept "$FROM_WLAN" "-p udp --dport 53"
 }
 
 policies
