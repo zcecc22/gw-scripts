@@ -6,21 +6,18 @@ BRIDGE_IF=br-lan
 WAN_IF=eth0
 LAN_IF=eth1
 WLAN_IF=wlan+
-VPN_IF=tun+
 LO=lo
 
 FROM_BRIDGE="-i ${BRIDGE_IF}"
 FROM_WAN="${FROM_BRIDGE} -m physdev --physdev-in ${WAN_IF}"
 FROM_LAN="${FROM_BRIDGE} -m physdev --physdev-in ${LAN_IF}"
 FROM_WLAN="${FROM_BRIDGE} -m physdev --physdev-in ${WLAN_IF}"
-FROM_VPN="-i ${VPN_IF}"
 FROM_LO="-i ${LO}"
 
 TO_BRIDGE="-o ${BRIDGE_IF}"
 TO_WAN="${TO_BRIDGE} -m physdev --physdev-out ${WAN_IF}"
 TO_LAN="${TO_BRIDGE} -m physdev --physdev-out ${LAN_IF}"
 TO_WLAN="${TO_BRIDGE} -m physdev --physdev-out ${WLAN_IF}"
-TO_VPN="-o ${VPN_IF}"
 TO_LO="-o ${LO}"
 
 FROM_WAN_TO_LAN="${FROM_WAN} ${TO_LAN}"
@@ -179,23 +176,12 @@ firewall() {
     create_chain input_wlan
     allow input_wlan
 
-    create_chain input_vpn
-    jump4 input_vpn icmp "-p icmp"
-    jump6 input_vpn icmp "-p icmpv6"
-    allow input_vpn "-p tcp -m tcp --dport 22"
-    allow input_vpn "-p tcp -m tcp --dport 6881:6999"
-    allow input_vpn "-p udp -m udp --dport 6881:6999"
-    drop input_vpn
-
     create_chain input_lo
     allow input_lo
 
     # OUTPUT CHAINS
     create_chain output_bridge
     allow output_bridge
-
-    create_chain output_vpn
-    allow output_vpn
 
     create_chain output_lo
     allow output_lo
@@ -226,14 +212,12 @@ firewall() {
     jump INPUT input_wan "$FROM_WAN"
     jump INPUT input_lan "$FROM_LAN"
     jump INPUT input_wlan "$FROM_WLAN"
-    jump INPUT input_vpn "$FROM_VPN"
     jump INPUT input_lo "$FROM_LO"
     drop INPUT
 
     # OUTPUT RULES
     jump OUTPUT general_tracking
     jump OUTPUT output_bridge "$TO_BRIDGE"
-    jump OUTPUT output_vpn "$TO_VPN"
     jump OUTPUT output_lo "$TO_LO"
     reject OUTPUT
 
