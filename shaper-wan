@@ -1,20 +1,13 @@
 #!/bin/sh
 
-IF=eth0
-DEV=eth0i
+IF=eth0.2
 TC=tc
-IP=ip
 PACKET_SIZE=1514
-BQL=$(( 100 * ${PACKET_SIZE} ))
-ECAKE_OPTS="bandwidth 12mbit rtt 50ms diffserv3 dual-srchost"
-ICAKE_OPTS="bandwidth 200mbit rtt 50ms besteffort dual-dsthost"
+BQL=$(( 200 * ${PACKET_SIZE} ))
+ECAKE_OPTS="bandwidth 20mbit diffserv3 dual-srchost"
 
 flush_qdisc() {
     ${TC} qdisc del dev ${IF} root &> /dev/null
-    ${TC} qdisc del dev ${IF} handle ffff: ingress &> /dev/null
-    ${TC} qdisc del dev ${DEV} root &> /dev/null
-    ${IP} link set dev ${DEV} down &> /dev/null
-    ${IP} link delete ${DEV} type ifb &> /dev/null
 }
 
 eth_setup() {
@@ -37,22 +30,6 @@ egress_qdisc() {
     ${TC} qdisc add dev ${IF} root cake ${ECAKE_OPTS}
 }
 
-ingress_qdisc() {
-    ${TC} qdisc del dev ${IF} handle ffff: ingress &> /dev/null
-    ${TC} qdisc add dev ${IF} handle ffff: ingress
-
-    ${IP} link add name ${DEV} type ifb
-
-    ${TC} qdisc del dev ${DEV} root &> /dev/null
-    ${TC} qdisc add dev ${DEV} root cake ${ICAKE_OPTS}
-
-    ${IP} link set dev ${DEV} up
-
-    ${TC} filter add dev ${IF} parent ffff: protocol all prio 1 u32 \
-    match u32 0 0 action mirred egress redirect dev ${DEV}
-}
-
 flush_qdisc
 eth_setup
 egress_qdisc
-ingress_qdisc

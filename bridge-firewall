@@ -2,9 +2,9 @@
 
 LOG=""
 
-BRIDGE_IF=br-lan
-WAN_IF=eth0
-LAN_IF=eth1
+BRIDGE_IF=br-bridge
+WAN_IF=eth0.2
+LAN_IF=eth1.1
 WLAN_IF=wlan+
 LO=lo
 
@@ -49,8 +49,8 @@ flush_firewall() {
     ipt -t filter -X
     ipt -t mangle -F
     ipt -t mangle -X
-    ipt4 -t nat -F
-    ipt4 -t nat -X
+    ipt -t nat -F
+    ipt -t nat -X
 }
 
 policies() {
@@ -76,7 +76,7 @@ chain_icmp() {
     allow4 icmp "-p icmp --icmp-type 3"
     allow4 icmp "-p icmp --icmp-type 8"
     allow4 icmp "-p icmp --icmp-type 11"
-    drop4 icmp
+    reject4 icmp
 
     allow6 icmp "-p icmpv6 --icmpv6-type 1"
     allow6 icmp "-p icmpv6 --icmpv6-type 2"
@@ -99,7 +99,7 @@ chain_icmp() {
     allow6 icmp "-s fe80::/10 -p icmpv6 --icmpv6-type 151"
     allow6 icmp "-s fe80::/10 -p icmpv6 --icmpv6-type 152"
     allow6 icmp "-s fe80::/10 -p icmpv6 --icmpv6-type 153"
-    drop6 icmp
+    reject6 icmp
 }
 
 jump() {
@@ -161,73 +161,66 @@ intercept() {
 }
 
 firewall() {
+    chain_general_tracking
+    chain_icmp
+
     # INPUT CHAINS
+    create_chain input_allow
+    allow input_allow
+
+    create_chain input_reject
+    reject input_reject
+
     create_chain input_wan
     jump4 input_wan icmp "-p icmp"
     jump6 input_wan icmp "-p icmpv6"
     allow input_wan "-p tcp -m tcp --dport 22"
     allow4 input_wan "-p udp -m udp --dport 68"
     allow6 input_wan "-s fe80::/10 -d fe80::/10 -p udp -m udp --sport 547 --dport 546"
-    drop input_wan
-
-    create_chain input_lan
-    allow input_lan
-
-    create_chain input_wlan
-    allow input_wlan
-
-    create_chain input_lo
-    allow input_lo
+    jump input_wan input_reject
 
     # OUTPUT CHAINS
-    create_chain output_bridge
-    allow output_bridge
+    create_chain output_allow
+    allow output_allow
 
-    create_chain output_lo
-    allow output_lo
+    create_chain output_reject
+    reject output_reject
 
     # FORWARD CHAINS
-    create_chain forward_wan_to_lan
-    jump4 forward_wan_to_lan icmp "-p icmp"
-    jump6 forward_wan_to_lan icmp "-p icmpv6"
-    allow4 forward_wan_to_lan "-p udp -m udp --dport 68"
-    allow6 forward_wan_to_lan "-s fe80::/10 -d fe80::/10 -p udp -m udp --sport 547 --dport 546"
-    drop forward_wan_to_lan
+    create_chain forward_allow
+    allow forward_allow
 
-    create_chain forward_wan_to_wlan
-    jump4 forward_wan_to_wlan icmp "-p icmp"
-    jump6 forward_wan_to_wlan icmp "-p icmpv6"
-    allow4 forward_wan_to_wlan "-p udp -m udp --dport 68"
-    allow6 forward_wan_to_wlan "-s fe80::/10 -d fe80::/10 -p udp -m udp --sport 547 --dport 546"
-    drop forward_wan_to_wlan
+    create_chain forward_drop
+    drop forward_drop
 
-    create_chain forward_lan
-    allow forward_lan
-
-    create_chain forward_wlan
-    allow forward_wlan
+    create_chain forward_wan_to_local
+    jump4 forward_wan_to_local icmp "-p icmp"
+    jump6 forward_wan_to_local icmp "-p icmpv6"
+    allow4 forward_wan_to_local "-p udp -m udp --dport 68"
+    allow6 forward_wan_to_local "-s fe80::/10 -d fe80::/10 -p udp -m udp --sport 547 --dport 546"
+    jump forward_wan_to_local forward_drop
 
     # INPUT RULES
     jump INPUT general_tracking
     jump INPUT input_wan "$FROM_WAN"
-    jump INPUT input_lan "$FROM_LAN"
-    jump INPUT input_wlan "$FROM_WLAN"
-    jump INPUT input_lo "$FROM_LO"
-    drop INPUT
+    jump INPUT input_allow "$FROM_LAN"
+    jump INPUT input_allow "$FROM_WLAN"
+    jump INPUT input_allow "$FROM_LO"
+    jump INPUT input_reject
 
     # OUTPUT RULES
     jump OUTPUT general_tracking
-    jump OUTPUT output_bridge "$TO_BRIDGE"
-    jump OUTPUT output_lo "$TO_LO"
-    reject OUTPUT
+    jump OUTPUT output_allow "$TO_BRIDGE"
+    jump OUTPUT output_allow "$TO_LO"
+    jump OUTPUT output_reject
 
     # FORWARD RULES
     jump FORWARD general_tracking
-    jump FORWARD forward_wan_to_lan "$FROM_WAN_TO_LAN"
-    jump FORWARD forward_wan_to_wlan "$FROM_WAN_TO_WLAN"
-    jump FORWARD forward_lan "$FROM_LAN"
-    jump FORWARD forward_wlan "$FROM_WLAN"
-    drop FORWARD
+    jump FORWARD forward_wan_to_local "$FROM_WAN_TO_LAN"
+    jump FORWARD forward_wan_to_local "$FROM_WAN_TO_WLAN"
+    jump FORWARD forward_allow "$FROM_LAN"
+    jump FORWARD forward_allow "$FROM_WLAN"
+    jump FORWARD forward_drop
 
     # INTERCEPT RULES
     intercept "$FROM_LAN" "-p udp --dport 53"
@@ -236,6 +229,4 @@ firewall() {
 
 policies
 flush_firewall
-chain_general_tracking
-chain_icmp
 firewall
